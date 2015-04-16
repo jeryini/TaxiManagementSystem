@@ -1,0 +1,59 @@
+apply plugin: 'java'
+apply plugin: 'idea'
+
+sourceCompatibility = 1.8
+version = '1.0'
+
+//for the sake of this example, let's introduce a 'provided' configuration
+configurations {
+    provided
+    provided.extendsFrom(compile)
+}
+
+jar {
+    manifest {
+        attributes 'Implementation-Title': 'Traffic Management System',
+                'Implementation-Version': version
+    }
+}
+
+ext {
+    reactorVersion = '2.0.0.RELEASE'
+}
+
+repositories {
+    maven { url 'http://repo.spring.io/libs-release' }
+    //maven { url 'http://repo.spring.io/libs-milestone' }
+    //maven { url 'http://repo.spring.io/libs-snapshot' }
+    mavenCentral()
+}
+
+dependencies {
+    // Reactor
+    compile ("io.projectreactor:reactor-core:$reactorVersion",
+            "io.projectreactor:reactor-stream:$reactorVersion",
+            "io.projectreactor:reactor-bus:$reactorVersion",
+            "io.projectreactor:reactor-net:$reactorVersion")
+    // Jackson
+    compile ("com.fasterxml.jackson.core:jackson-core:2.5.2",
+            "com.fasterxml.jackson.core:jackson-annotations:2.5.2",
+            "com.fasterxml.jackson.core:jackson-databind:2.5.2")
+    // Log4J
+    compile "org.slf4j:slf4j-simple:1.7.12"
+
+    // MySQL Java Connector
+    compile "mysql:mysql-connector-java:5.1.35"
+
+    // Apache Commons CLI
+    compile "commons-cli:commons-cli:1.2"
+}
+
+idea {
+    module {
+        //if you love browsing Javadoc
+        downloadJavadoc = true
+
+        //and love reading sources :)
+        downloadSources = true
+    }
+}
