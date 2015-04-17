@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.architectures;
 
+import com.jernejerin.traffic.database.PollingDriver;
 import com.jernejerin.traffic.entities.BaseTicket;
 import reactor.Environment;
 import reactor.fn.Consumer;
@@ -34,11 +35,6 @@ public class EDA {
         // codec for BaseTicket class
         JsonCodec<BaseTicket, BaseTicket> codec = new JsonCodec<BaseTicket, BaseTicket>(BaseTicket.class);
 
-        // get prepared statement for inserting ticket into database
-        PreparedStatement insertTicket = getInsertPreparedStatement();
-        if (insertTicket == null)
-            throw new Exception();
-
         // TCP server
         TcpServer<BaseTicket, BaseTicket> server = NetStreams.tcpServer(
                 spec -> spec
@@ -46,6 +42,15 @@ public class EDA {
                         .codec(codec)
                         .dispatcher(Environment.cachedDispatcher())
         );
+
+        // Then we set up and register the PoolingDriver.
+        System.out.println("Setting up driver.");
+        try {
+            PollingDriver.setupDriver("jdbc:mysql://localhost:3307/traffic_management");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println("Done.");
 
         // consumer for TCP server
         server.log("server").consume(new Consumer<ChannelStream<BaseTicket, BaseTicket>>() {
@@ -85,10 +90,22 @@ public class EDA {
                         .map(bt -> bt)
                                 // insert ticket to DB using prepared statement
                         .map(bt -> {
-                            System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
+                            PreparedStatement insertTicket = null;
+                            Connection conn = null;
                             try {
+                                System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
+                                // first we need to get connection from connection pool
+                                conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:example");
+
+                                // setting up prepared statement
+                                insertTicket = conn.prepareStatement("insert into ticket (id, " +
+                                        "startTime, lastUpdated, speed, currentLaneId, previousSectionId, " +
+                                        "nextSectionId, sectionPosition, destinationId, vehicleId) values (?, ?, ?, " +
+                                        "?, ?, ?, ?, ?, ?, ?)");
+
                                 // TODO (Jernej Jerin): Find out why we get duplicate values.
                                 System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
+
                                 insertTicket.setInt(1, bt.getId());
                                 insertTicket.setLong(2, bt.getStartTime());
                                 insertTicket.setLong(3, bt.getLastUpdated());
@@ -103,6 +120,9 @@ public class EDA {
                                 insertTicket.execute();
                             } catch (SQLException e) {
                                 e.printStackTrace();
+                            } finally {
+                                try { if (insertTicket != null) insertTicket.close(); } catch(Exception e) { }
+                                try { if (conn != null) conn.close(); } catch(Exception e) { }
                             }
 
                             // pass forward base ticket
@@ -117,30 +137,5 @@ public class EDA {
         // run the server forever
         // TODO(Jernej Jerin): Is there a better way to do this?
         Thread.sleep(Long.MAX_VALUE);
-    }
-
-    private static PreparedStatement getInsertPreparedStatement() {
-        PreparedStatement insertStatement = null;
-        try {
-            // create a mysql database connection
-            String driver = "com.mysql.jdbc.Driver";
-            String url = "jdbc:mysql://localhost:3307/traffic_management";
-
-            // MySQL connection settings
-            Class.forName(driver);
-            Connection conn = DriverManager.getConnection(url, "root", "jrj18ene9891");
-
-            // insert statement for traffic ticket
-            String query = "insert into ticket (id, startTime, lastUpdated, speed, " +
-                    "currentLaneId, previousSectionId, nextSectionId, sectionPosition, " +
-                    "destinationId, vehicleId) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-
-            // create the mysql insert prepared statement and return it
-            insertStatement = conn.prepareStatement(query);
-        } catch (Exception e) {
-            LOGGER.log(Level.ALL, e.getMessage());
-        } finally {
-            return insertStatement;
-        }
     }
 }

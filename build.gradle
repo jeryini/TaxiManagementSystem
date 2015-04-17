@@ -46,6 +46,9 @@ dependencies {
 
     // Apache Commons CLI
     compile "commons-cli:commons-cli:1.2"
+
+    // Apache Commons DBCP
+    compile "org.apache.commons:commons-dbcp2:2.1"
 }
 
 idea {
