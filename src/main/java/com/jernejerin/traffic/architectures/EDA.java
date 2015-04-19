@@ -1,6 +1,7 @@
 package com.jernejerin.traffic.architectures;
 
 import com.jernejerin.traffic.database.PollingDriver;
+import com.jernejerin.traffic.database.TicketOperations;
 import com.jernejerin.traffic.entities.BaseTicket;
 import reactor.Environment;
 import reactor.fn.Consumer;
@@ -14,7 +15,6 @@ import java.sql.PreparedStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -86,46 +86,18 @@ public class EDA {
                     // Read this: https://groups.google.com/d/msg/reactor-framework/JO0hGftOaZs/20IhESjPQI0J
                     // Also: https://groups.google.com/forum/#!searchin/reactor-framework/findOne/reactor-framework/ldOfjEsQzio/MeLVWhrCDOAJ
                     stream.dispatchOn(Environment.newCachedDispatchers(procs).get())
-                        // validate ticket structure
-                        .map(bt -> bt)
-                                // insert ticket to DB using prepared statement
+                        // validate ticket structure, which means checking that values are inside specified interval
                         .map(bt -> {
-                            PreparedStatement insertTicket = null;
-                            Connection conn = null;
-                            try {
-                                System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
-                                // first we need to get connection from connection pool
-                                conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:example");
+                            // validate and return fixed ticket
+                            bt = TicketOperations.validateTicketValues(bt);
 
-                                // setting up prepared statement
-                                insertTicket = conn.prepareStatement("insert into ticket (id, " +
-                                        "startTime, lastUpdated, speed, currentLaneId, previousSectionId, " +
-                                        "nextSectionId, sectionPosition, destinationId, vehicleId) values (?, ?, ?, " +
-                                        "?, ?, ?, ?, ?, ?, ?)");
-
-                                // TODO (Jernej Jerin): Find out why we get duplicate values.
-                                System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
-
-                                insertTicket.setInt(1, bt.getId());
-                                insertTicket.setLong(2, bt.getStartTime());
-                                insertTicket.setLong(3, bt.getLastUpdated());
-                                insertTicket.setDouble(4, bt.getSpeed());
-                                insertTicket.setInt(5, bt.getCurrentLaneId());
-                                insertTicket.setInt(6, bt.getPreviousSectionId());
-                                insertTicket.setInt(7, bt.getNextSectionId());
-                                insertTicket.setDouble(8, bt.getSectionPositon());
-                                insertTicket.setInt(9, bt.getDestinationId());
-                                insertTicket.setInt(10, bt.getVehicleId());
-
-                                insertTicket.execute();
-                            } catch (SQLException e) {
-                                e.printStackTrace();
-                            } finally {
-                                try { if (insertTicket != null) insertTicket.close(); } catch(Exception e) { }
-                                try { if (conn != null) conn.close(); } catch(Exception e) { }
-                            }
-
-                            // pass forward base ticket
+                            // pass forward ticket as new event
+                            return bt;
+                        })
+                        // insert ticket to DB using prepared statement
+                        .map(bt -> {
+                            // save ticket
+                            TicketOperations.insertTicket(bt);
                             return bt;
                         })
                         // compute statistics
@@ -136,6 +108,7 @@ public class EDA {
 
         // run the server forever
         // TODO(Jernej Jerin): Is there a better way to do this?
+        // TODO (Jernej Jerin): There is a solution of using Latch Countdown.
         Thread.sleep(Long.MAX_VALUE);
     }
 }
