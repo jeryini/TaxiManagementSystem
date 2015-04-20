@@ -2,16 +2,21 @@ package com.jernejerin.traffic.database;
 
 import com.fasterxml.jackson.databind.deser.Deserializers;
 import com.jernejerin.traffic.entities.BaseTicket;
+import com.jernejerin.traffic.entities.Ticket;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Created by Jernej Jerin on 19.4.2015.
  */
 public class TicketOperations {
+    private final static Logger LOGGER = Logger.getLogger(TicketOperations.class.getName());
+
     /**
      * Validates a base ticket for erroneous values. If the value is considered erroneous,
      * it is set to -1.
@@ -20,6 +25,8 @@ public class TicketOperations {
      * @return A base ticket with erroneous values set to -1.
      */
     public static BaseTicket validateTicketValues(BaseTicket baseTicket) {
+        LOGGER.log(Level.INFO, "Started validating ticket values for ticket id = " +
+                baseTicket.getId() + " from thread = " + Thread.currentThread());
         if (baseTicket.getId() < 0) {
             baseTicket.setId(-1);
         }
@@ -50,6 +57,8 @@ public class TicketOperations {
         if (baseTicket.getVehicleId() < 0) {
             baseTicket.setVehicleId(-1);
         }
+        LOGGER.log(Level.INFO, "Finished validating ticket values for ticket id = " +
+                baseTicket.getId() + " from thread = " + Thread.currentThread());
         return baseTicket;
     }
 
@@ -59,10 +68,11 @@ public class TicketOperations {
      * @param baseTicket Ticket to insert.
      */
     public static void insertTicket(BaseTicket baseTicket) {
+        LOGGER.log(Level.INFO, "Started inserting ticket into DB for ticket id = " +
+                baseTicket.getId() + " from thread = " + Thread.currentThread());
         PreparedStatement insertTicket = null;
         Connection conn = null;
         try {
-            System.out.printf("Insert ticket %s into DB from thread %s", baseTicket.getId(), Thread.currentThread());
             // first we need to get connection from connection pool
             conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:example");
 
@@ -71,9 +81,6 @@ public class TicketOperations {
                     "startTime, lastUpdated, speed, currentLaneId, previousSectionId, " +
                     "nextSectionId, sectionPosition, destinationId, vehicleId) values (?, ?, ?, " +
                     "?, ?, ?, ?, ?, ?, ?)");
-
-            // TODO (Jernej Jerin): Find out why we get duplicate values.
-            System.out.printf("Insert ticket %s into DB from thread %s", baseTicket.getId(), Thread.currentThread());
 
             insertTicket.setInt(1, baseTicket.getId());
             insertTicket.setLong(2, baseTicket.getStartTime());
@@ -88,10 +95,13 @@ public class TicketOperations {
 
             insertTicket.execute();
         } catch (SQLException e) {
-            e.printStackTrace();
+            LOGGER.log(Level.INFO, "Problem when inserting ticket into DB for ticket id = " +
+                    baseTicket.getId() + " from thread = " + Thread.currentThread());
         } finally {
             try { if (insertTicket != null) insertTicket.close(); } catch(Exception e) { }
             try { if (conn != null) conn.close(); } catch(Exception e) { }
+            LOGGER.log(Level.INFO, "Finished inserting ticket into DB for for ticket id = " +
+                    baseTicket.getId() + " from thread = " + Thread.currentThread());
         }
     }
 }
