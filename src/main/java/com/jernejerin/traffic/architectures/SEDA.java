@@ -1,6 +1,6 @@
 package com.jernejerin.traffic.architectures;
 
-import com.jernejerin.traffic.entities.BaseTicket;
+import com.jernejerin.traffic.entities.Trip;
 import org.apache.commons.cli.*;
 import reactor.Environment;
 import reactor.core.DispatcherSupplier;
@@ -99,13 +99,13 @@ public class SEDA {
         Environment.initializeIfEmpty().assignErrorJournal();
 
         // event driven broadcaster
-        Broadcaster<BaseTicket> stageBroadcaster = Broadcaster.create(Environment.get());
+        Broadcaster<Trip> stageBroadcaster = Broadcaster.create(Environment.get());
 
         DispatcherSupplier supplierStage1 = Environment.newCachedDispatchers(stage1T, "stage1");
         DispatcherSupplier supplierStage2 = Environment.newCachedDispatchers(stage2T, "stage2");
 
-        // codec for BaseTicket class
-        JsonCodec<BaseTicket, BaseTicket> codec = new JsonCodec<BaseTicket, BaseTicket>(BaseTicket.class);
+        // codec for Trip class
+        JsonCodec<Trip, Trip> codec = new JsonCodec<Trip, Trip>(Trip.class);
 
         // get prepared statement for inserting ticket into database
         PreparedStatement insertTicket = getInsertPreparedStatement();
@@ -113,7 +113,7 @@ public class SEDA {
             throw new Exception();
 
         // TCP server
-        TcpServer<BaseTicket, BaseTicket> server = NetStreams.tcpServer(
+        TcpServer<Trip, Trip> server = NetStreams.tcpServer(
                 spec -> spec
                         .listen(portTCP)
                         .codec(codec)
@@ -121,17 +121,17 @@ public class SEDA {
         );
 
         // consumer for TCP server
-        server.log("server").consume(new Consumer<ChannelStream<BaseTicket, BaseTicket>>() {
+        server.log("server").consume(new Consumer<ChannelStream<Trip, Trip>>() {
             @Override
-            public void accept(ChannelStream<BaseTicket, BaseTicket> channel) {
-                channel.log("channel").consume(new Consumer<BaseTicket>() {
+            public void accept(ChannelStream<Trip, Trip> channel) {
+                channel.log("channel").consume(new Consumer<Trip>() {
                     @Override
-                    public void accept(BaseTicket baseTicket) {
-                        System.out.printf("TCP server receiving ticket %s, speed %s from thread %s%n", baseTicket.getId(), baseTicket.getSpeed(), Thread.currentThread());
+                    public void accept(Trip trip) {
+//                        System.out.printf("TCP server receiving ticket %s, speed %s from thread %s%n", trip.getId(), trip.getSpeed(), Thread.currentThread());
                         // dispatch event to a broadcaster pipeline,
                         // which uses the same number of threads
                         // as there are cores
-                        stageBroadcaster.onNext(baseTicket);
+                        stageBroadcaster.onNext(trip);
                         try {
                             Thread.sleep(1000);
                         } catch (InterruptedException e) {
@@ -165,16 +165,16 @@ public class SEDA {
                         try {
                             // TODO (Jernej Jerin): Find out why we get duplicate values.
                             System.out.printf("Insert ticket %s into DB from thread %s", bt.getId(), Thread.currentThread());
-                            insertTicket.setInt(1, bt.getId());
-                            insertTicket.setLong(2, bt.getStartTime());
-                            insertTicket.setLong(3, bt.getLastUpdated());
-                            insertTicket.setDouble(4, bt.getSpeed());
-                            insertTicket.setInt(5, bt.getCurrentLaneId());
-                            insertTicket.setInt(6, bt.getPreviousSectionId());
-                            insertTicket.setInt(7, bt.getNextSectionId());
-                            insertTicket.setDouble(8, bt.getSectionPositon());
-                            insertTicket.setInt(9, bt.getDestinationId());
-                            insertTicket.setInt(10, bt.getVehicleId());
+//                            insertTicket.setInt(1, bt.getId());
+//                            insertTicket.setLong(2, bt.getStartTime());
+//                            insertTicket.setLong(3, bt.getLastUpdated());
+//                            insertTicket.setDouble(4, bt.getSpeed());
+//                            insertTicket.setInt(5, bt.getCurrentLaneId());
+//                            insertTicket.setInt(6, bt.getPreviousSectionId());
+//                            insertTicket.setInt(7, bt.getNextSectionId());
+//                            insertTicket.setDouble(8, bt.getSectionPositon());
+//                            insertTicket.setInt(9, bt.getDestinationId());
+//                            insertTicket.setInt(10, bt.getVehicleId());
 
                             insertTicket.execute();
                         } catch (SQLException e) {

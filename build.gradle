@@ -12,19 +12,20 @@ configurations {
 
 jar {
     manifest {
-        attributes 'Implementation-Title': 'Traffic Management System',
+        attributes 'Implementation-Title': 'Taxi Management System',
                 'Implementation-Version': version
     }
 }
 
 ext {
-    reactorVersion = '2.0.0.RELEASE'
+    reactorVersion = '2.0.1.BUILD-SNAPSHOT'
+//    reactorVersion = '2.0.0.RELEASE'
 }
 
 repositories {
-    maven { url 'http://repo.spring.io/libs-release' }
+//    maven { url 'http://repo.spring.io/libs-release' }
     //maven { url 'http://repo.spring.io/libs-milestone' }
-    //maven { url 'http://repo.spring.io/libs-snapshot' }
+    maven { url 'http://repo.spring.io/libs-snapshot' }
     mavenCentral()
 }
 
@@ -49,6 +50,12 @@ dependencies {
 
     // Apache Commons DBCP
     compile "org.apache.commons:commons-dbcp2:2.1"
+
+    // CSV parser
+    compile "com.univocity:univocity-parsers:1.5.2"
+
+    // Netty
+    compile "io.netty:netty-all:4.0.27.Final"
 }
 
 idea {

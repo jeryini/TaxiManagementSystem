@@ -1,5 +1,5 @@
-# Traffic management system
-A server side system for **reading simulation traffic data** and distributing its processing. The system reads traffic data, checks for correct data and saves it into the database. It also updates statistics. The system is *horizontally and vertically scalable* and *resilient to partial outages*.
+# Taxi management system
+A server side system for **reading taxi data** and distributing its processing. The system reads taxi data, checks for correct data and saves it into the database. It also updates statistics. The system is *horizontally and vertically scalable* and *resilient to partial outages*.
 
 ## Purpose
 This project was done for a Master's degree at [Faculty of Computer and Information Science](http://www.fri.uni-lj.si/en/), [University of Ljubljana](http://www.uni-lj.si/eng/). We did a comparison between three different architectures:
