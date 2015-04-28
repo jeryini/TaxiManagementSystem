@@ -11,8 +11,9 @@ import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpClient;
 import reactor.rx.broadcast.Broadcaster;
 
-import java.io.*;
-import java.util.Arrays;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 
 
 /**
@@ -39,7 +40,7 @@ public class TcpTaxiClient {
         // dispatch onto a new dispatcher that is suitable for streams.
         // Instruct the stream to request the produced subscription indefinitely.
         // By consuming values we are creating a demand to the TCP server
-        trips.dispatchOn(Environment.cachedDispatcher())
+        trips.log("trips").dispatchOn(Environment.cachedDispatcher())
             .consume();
 
         // TCP client for producing demand to the TCP server
@@ -53,7 +54,7 @@ public class TcpTaxiClient {
         // subscribe to trip publisher, which will reply data on the active connection
         // We basically have a stream of data from broadcaster that we now publish
         // it to the TCP server.
-        client.consumeOn(Environment.cachedDispatcher(), ch -> ch.sink(trips));
+        client.log("client").consumeOn(Environment.cachedDispatcher(), ch -> ch.sink(trips));
 
         // open connection to server
         client.open();
@@ -62,15 +63,21 @@ public class TcpTaxiClient {
         CsvParser parser = setupParser();
 
         // read records one by one
-        parser.beginParsing(getReader("/com/jernejerin/trips_20_days.csv"));
+        parser.beginParsing(getReader("/com/jernejerin/trips_example.csv"));
 
         String[] row;
+
+        int count = 0;
         // read line by line
         while ((row = parser.parseNext()) != null) {
-            String trip = Arrays.toString(row);
+            // create a string from array separated by comma
+            String trip = String.join(",", row);
 
             // sink values to trips broadcaster
             trips.onNext(trip);
+
+            // need to sleep because it is to fast :)
+            Thread.sleep(1);
         }
 
         // finished parsing all the data from the csv file

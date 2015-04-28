@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.entities;
 
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
@@ -10,8 +11,8 @@ public class Trip {
     private int id;
     private String medallion;  // an md5sum of the identifier of the taxi - vehicle bound
     private String hackLicense; // an md5sum of the identifier for the taxi license
-    private LocalTime pickupDatetime; // time when the passenger(s) were picked up
-    private LocalTime dropOffDatetime; // time when the passenger(s) were dropped off
+    private LocalDateTime pickupDatetime; // time when the passenger(s) were picked up
+    private LocalDateTime dropOffDatetime; // time when the passenger(s) were dropped off
     private int tripTime;   // duration of the trip in seconds
     private double tripDistance;    // trip distance in miles
     private double pickupLongitude; // longitude coordinate of the pickup location
@@ -19,16 +20,16 @@ public class Trip {
     private double dropOffLongitude;    // longitude coordinate of the drop-off location
     private double dropOffLatitude; // latitude coordinate of the drop-off location
     private Payment paymentType;    // the payment method - credit card or cash
-    private int fareAmount;    // fare amount in dollar cents
-    private int surcharge;  // surcharge in dollar cents
-    private int mtaTax; // tax in dollar cents
-    private int tipAmount;  // tip in dollar cents
-    private int tollsAmount; // bridge and tunnel tolls in dollar cents
-    private int totalAmount; // total paid amount in dollar cents
+    private double fareAmount;    // fare amount in dollars
+    private double surcharge;  // surcharge in dollars
+    private double mtaTax; // tax in dollars
+    private double tipAmount;  // tip in dollars
+    private double tollsAmount; // bridge and tunnel tolls in dollars
+    private double totalAmount; // total paid amount in dollars
 
     public Trip() {}
 
-    public Trip(int id, String medallion, String hackLicense, LocalTime pickupDatetime, LocalTime dropOffDatetime, int tripTime, double tripDistance, double pickupLongitude, double pickupLatitude, double dropOffLongitude, double dropOffLatitude, Payment paymentType, int fareAmount, int surcharge, int mtaTax, int tipAmount, int tollsAmount, int totalAmount) {
+    public Trip(int id, String medallion, String hackLicense, LocalDateTime pickupDatetime, LocalDateTime dropOffDatetime, int tripTime, double tripDistance, double pickupLongitude, double pickupLatitude, double dropOffLongitude, double dropOffLatitude, Payment paymentType, double fareAmount, double surcharge, double mtaTax, double tipAmount, double tollsAmount, double totalAmount) {
         this.id = id;
         this.medallion = medallion;
         this.hackLicense = hackLicense;
@@ -73,19 +74,19 @@ public class Trip {
         this.hackLicense = hackLicense;
     }
 
-    public LocalTime getPickupDatetime() {
+    public LocalDateTime getPickupDatetime() {
         return pickupDatetime;
     }
 
-    public void setPickupDatetime(LocalTime pickupDatetime) {
+    public void setPickupDatetime(LocalDateTime pickupDatetime) {
         this.pickupDatetime = pickupDatetime;
     }
 
-    public LocalTime getDropOffDatetime() {
+    public LocalDateTime getDropOffDatetime() {
         return dropOffDatetime;
     }
 
-    public void setDropOffDatetime(LocalTime dropOffDatetime) {
+    public void setDropOffDatetime(LocalDateTime dropOffDatetime) {
         this.dropOffDatetime = dropOffDatetime;
     }
 
@@ -145,51 +146,51 @@ public class Trip {
         this.paymentType = paymentType;
     }
 
-    public int getFareAmount() {
+    public double getFareAmount() {
         return fareAmount;
     }
 
-    public void setFareAmount(int fareAmount) {
+    public void setFareAmount(double fareAmount) {
         this.fareAmount = fareAmount;
     }
 
-    public int getSurcharge() {
+    public double getSurcharge() {
         return surcharge;
     }
 
-    public void setSurcharge(int surcharge) {
+    public void setSurcharge(double surcharge) {
         this.surcharge = surcharge;
     }
 
-    public int getMtaTax() {
+    public double getMtaTax() {
         return mtaTax;
     }
 
-    public void setMtaTax(int mtaTax) {
+    public void setMtaTax(double mtaTax) {
         this.mtaTax = mtaTax;
     }
 
-    public int getTipAmount() {
+    public double getTipAmount() {
         return tipAmount;
     }
 
-    public void setTipAmount(int tipAmount) {
+    public void setTipAmount(double tipAmount) {
         this.tipAmount = tipAmount;
     }
 
-    public int getTollsAmount() {
+    public double getTollsAmount() {
         return tollsAmount;
     }
 
-    public void setTollsAmount(int tollsAmount) {
+    public void setTollsAmount(double tollsAmount) {
         this.tollsAmount = tollsAmount;
     }
 
-    public int getTotalAmount() {
+    public double getTotalAmount() {
         return totalAmount;
     }
 
-    public void setTotalAmount(int totalAmount) {
+    public void setTotalAmount(double totalAmount) {
         this.totalAmount = totalAmount;
     }
 

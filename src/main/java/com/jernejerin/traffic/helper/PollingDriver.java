@@ -1,4 +1,4 @@
-package com.jernejerin.traffic.database;
+package com.jernejerin.traffic.helper;
 
 import org.apache.commons.dbcp2.*;
 import org.apache.commons.pool2.ObjectPool;
