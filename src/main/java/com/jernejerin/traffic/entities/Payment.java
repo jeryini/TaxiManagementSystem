@@ -1,7 +1,11 @@
 package com.jernejerin.traffic.entities;
 
 /**
- * Created by Jernej Jerin on 27.4.2015.
+ * <p>
+ * Enumerator for taxi trip payments.
+ * </p>
+ *
+ * @author Jernej Jerin
  */
 public enum Payment {
     CASH,

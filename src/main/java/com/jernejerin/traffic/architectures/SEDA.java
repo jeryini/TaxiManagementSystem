@@ -9,6 +9,7 @@ import reactor.io.codec.json.JsonCodec;
 import reactor.io.net.ChannelStream;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
+import reactor.rx.Streams;
 import reactor.rx.broadcast.Broadcaster;
 
 import java.sql.PreparedStatement;
@@ -51,7 +52,7 @@ public class SEDA {
 
     private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
 
-    public static void main(String[] args) throws InterruptedException, Exception {
+    public static void main(String[] args) throws Exception {
         // options for specifying command line options
         Options options = new Options();
 
@@ -121,25 +122,17 @@ public class SEDA {
         );
 
         // consumer for TCP server
-        server.log("server").consume(new Consumer<ChannelStream<Trip, Trip>>() {
-            @Override
-            public void accept(ChannelStream<Trip, Trip> channel) {
-                channel.log("channel").consume(new Consumer<Trip>() {
-                    @Override
-                    public void accept(Trip trip) {
-//                        System.out.printf("TCP server receiving ticket %s, speed %s from thread %s%n", trip.getId(), trip.getSpeed(), Thread.currentThread());
-                        // dispatch event to a broadcaster pipeline,
-                        // which uses the same number of threads
-                        // as there are cores
-                        stageBroadcaster.onNext(trip);
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                });
-            }
+        server.start(ch -> {
+            ch.consume(trip -> {
+                LOGGER.log(Level.INFO, "TCP server receiving trip " +
+                        trip + " from thread = " + Thread.currentThread());
+                // dispatch event to a broadcaster pipeline, which uses the same number of threads
+                // as there are cores
+//                trips.onNext(trip);
+                LOGGER.log(Level.INFO, "TCP server send ticket to streaming pipeline for ticket = " +
+                        trip + " from thread = " + Thread.currentThread());
+            });
+            return Streams.never();
         });
 
         // processing through stages of streams, where each stage has a separate thread pool
@@ -200,7 +193,7 @@ public class SEDA {
                 .dispatchOn(Environment.sharedDispatcher())
                 .consume();
 
-        server.start().await();
+        server.shutdown().await();
 
         // run the server forever
         // TODO(Jernej Jerin): Is there a better way to do this?

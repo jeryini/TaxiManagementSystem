@@ -1,7 +1,6 @@
 package com.jernejerin.traffic.client;
 
-import com.univocity.parsers.csv.CsvParser;
-import com.univocity.parsers.csv.CsvParserSettings;
+import com.jernejerin.traffic.helper.TaxiStream;
 
 import org.apache.commons.cli.*;
 
@@ -9,15 +8,21 @@ import reactor.Environment;
 import reactor.io.codec.StandardCodecs;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpClient;
-import reactor.rx.broadcast.Broadcaster;
-
-import java.io.InputStreamReader;
-import java.io.Reader;
-import java.io.UnsupportedEncodingException;
-
+import reactor.rx.Stream;
 
 /**
- * Created by Jernej Jerin on 21.4.2015.
+ * <p>
+ * A running program for reading Taxi data from local
+ * file and sending it to the TCP server. The program parses
+ * the file line by line. It accepts the following arguments:
+ * - hostTCP - TCP server host name
+ * - portTCP - TCP server port
+ * - fileName - Name of the file
+ *
+ * For more info, use --help.
+ * </p>
+ *
+ * @author Jernej Jerin
  */
 public class TcpTaxiClient {
     /** The default hostname of the TCP server. */
@@ -26,22 +31,26 @@ public class TcpTaxiClient {
     /** The default port of the TCP server. */
     private static int portTCP = 30000;
 
+    /** The default file name. */
+    private static String fileName = "trips_example.csv";
+
     public static void main(String[] args) throws InterruptedException{
         // set host and port from command line options
         setOptionsCmd(args);
 
         // environment initialization. This creates and assigns a context environment
-        // bound to the current classloader.
+        // bound to the current class loader.
         Environment.initialize();
 
         // create a broadcaster we can sink values into
-        Broadcaster<String> trips = Broadcaster.create();
+        TaxiStream taxiStream = new TaxiStream("/com/jernejerin/" + fileName);
 
-        // dispatch onto a new dispatcher that is suitable for streams.
-        // Instruct the stream to request the produced subscription indefinitely.
-        // By consuming values we are creating a demand to the TCP server
-        trips.log("trips").dispatchOn(Environment.cachedDispatcher())
-            .consume();
+        // instruct the stream to request the produced subscription indefinitely
+        // by consuming values we are creating a demand to the TCP server
+        taxiStream.getTrips().consume();
+
+        // a separate sink stream with capacity of one
+        Stream<String> sink = taxiStream.getTrips().log("trips").capacity(1L);
 
         // TCP client for producing demand to the TCP server
         TcpClient<String, String> client = NetStreams.tcpClient(
@@ -51,64 +60,27 @@ public class TcpTaxiClient {
                 .dispatcher(Environment.cachedDispatcher())
         );
 
-        // subscribe to trip publisher, which will reply data on the active connection
-        // We basically have a stream of data from broadcaster that we now publish
+        // start a connection to server. Subscribe to sink publisher, which will reply data on
+        // the active connection. We basically have a stream of data from broadcaster that we now publish
         // it to the TCP server.
-        client.log("client").consumeOn(Environment.cachedDispatcher(), ch -> ch.sink(trips));
+        client.start(ch -> ch.writeWith(sink));
 
-        // open connection to server
-        client.open();
+        // read stream of data
+        taxiStream.readStream();
 
-        // setting up CSV parser
-        CsvParser parser = setupParser();
-
-        // read records one by one
-        parser.beginParsing(getReader("/com/jernejerin/trips_example.csv"));
-
-        String[] row;
-
-        int count = 0;
-        // read line by line
-        while ((row = parser.parseNext()) != null) {
-            // create a string from array separated by comma
-            String trip = String.join(",", row);
-
-            // sink values to trips broadcaster
-            trips.onNext(trip);
-
-            // need to sleep because it is to fast :)
-            Thread.sleep(1);
-        }
-
-        // finished parsing all the data from the csv file
-        parser.stopParsing();
-
-        // close client
-        client.close();
+        // shutdown client
+        client.shutdown().await();
     }
 
     /**
-     * Setup a parser (line separator, etc.).
-     *
-     * @return a new instance using defined settings
-     */
-    public static CsvParser setupParser() {
-        // setting up CSV parser
-        CsvParserSettings settings = new CsvParserSettings();
-
-        // file uses '\n' as the line separator
-        settings.getFormat().setLineSeparator("\n");
-
-        // create a CSV parser using defined settings
-        return new CsvParser(settings);
-    }
-
-    /**
+     * <p>
      * Set options from passed command line arguments. The following
      * options are set:
      *  - host TCP
      *  - port TCP
+     *  - file name
      * It also prints the display help if user passes in help option.
+     * </p>
      *
      * @param args an array of command line arguments
      */
@@ -120,6 +92,7 @@ public class TcpTaxiClient {
         options.addOption("help", false, "help for usage");
         options.addOption("hostTCP", true, "the hostname of the TCP server");
         options.addOption("portTCP", true, "the port of the TCP server");
+        options.addOption("fileName", true, "the name of the file that holds the data");
 
         // parser for command line arguments
         CommandLineParser parser = new GnuParser();
@@ -143,19 +116,8 @@ public class TcpTaxiClient {
             hostTCP = cmd.getOptionValue("hostTCP");
         if (cmd.getOptionValue("portTCP") != null)
             portTCP = Integer.parseInt(cmd.getOptionValue("portTCP"));
+        if (cmd.getOptionValue("fileName") != null)
+            fileName = cmd.getOptionValue("fileName");
     }
 
-    /**
-     * Creates a reader for a resource in the relative path
-     *
-     * @param relativePath relative path of the resource to be read
-     * @return a reader of the resource
-     */
-    public static Reader getReader(String relativePath) {
-        try {
-            return new InputStreamReader(TcpTaxiClient.class.getResourceAsStream(relativePath), "UTF-8");
-        } catch (UnsupportedEncodingException e) {
-            throw new IllegalStateException("Unable to read input", e);
-        }
-    }
 }

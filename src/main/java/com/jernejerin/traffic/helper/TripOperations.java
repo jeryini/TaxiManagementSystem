@@ -2,17 +2,29 @@ package com.jernejerin.traffic.helper;
 
 import com.jernejerin.traffic.entities.Payment;
 import com.jernejerin.traffic.entities.Trip;
+
 import org.apache.commons.lang3.math.NumberUtils;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Created by Jernej Jerin on 19.4.2015.
+ * <p>
+ * Helper class for trip operations.
+ * </p>
+ *
+ * @author Jernej Jerin
  */
 public class TripOperations {
     private final static Logger LOGGER = Logger.getLogger(TripOperations.class.getName());
@@ -89,8 +101,8 @@ public class TripOperations {
 
             insertTrip.setString(1, trip.getMedallion());
             insertTrip.setString(2, trip.getHackLicense());
-            insertTrip.setDate(3, new Date(trip.getPickupDatetime().getSecond() * 1000));
-            insertTrip.setDate(4, new Date(trip.getDropOffDatetime().getSecond() * 1000));
+            insertTrip.setTimestamp(3, new Timestamp(trip.getPickupDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
+            insertTrip.setTimestamp(4, new Timestamp(trip.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
             insertTrip.setInt(5, trip.getTripTime());
             insertTrip.setDouble(6, trip.getTripDistance());
             insertTrip.setDouble(7, trip.getPickupLongitude());
@@ -107,11 +119,22 @@ public class TripOperations {
 
             insertTrip.execute();
         } catch (SQLException e) {
-            LOGGER.log(Level.INFO, "Problem when inserting ticket into DB for ticket = " +
+            LOGGER.log(Level.SEVERE, "Problem when inserting ticket into DB for ticket = " +
                     trip + " from thread = " + Thread.currentThread());
         } finally {
-            try { if (insertTrip != null) insertTrip.close(); } catch(Exception e) { }
-            try { if (conn != null) conn.close(); } catch(Exception e) { }
+            try {
+                if (insertTrip != null) insertTrip.close();
+            }
+            catch(Exception e) {
+                LOGGER.log(Level.SEVERE, "Problem with closing prepared statement for ticket = " +
+                        trip + " from thread = " + Thread.currentThread());
+            }
+            try {
+                if (conn != null) conn.close();
+            }
+            catch(Exception e) {
+                LOGGER.log(Level.SEVERE, "Problem with closing connection from thread = " + Thread.currentThread());
+            }
             LOGGER.log(Level.INFO, "Finished inserting ticket into DB for for ticket = " +
                     trip + " from thread = " + Thread.currentThread());
         }

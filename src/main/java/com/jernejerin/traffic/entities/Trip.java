@@ -4,7 +4,11 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 /**
- * Created by Jernej Jerin on 11.4.2015.
+ * <p>
+ * A taxi trip entity.
+ * </p>
+ *
+ * @author Jernej Jerin
  */
 public class Trip {
 

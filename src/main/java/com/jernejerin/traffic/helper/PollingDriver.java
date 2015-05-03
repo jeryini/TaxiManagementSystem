@@ -6,18 +6,32 @@ import org.apache.commons.pool2.impl.GenericObjectPool;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
- * Created by Jernej Jerin on 17.4.2015.
+ * <p>
+ * A helper class for setting up polling driver for MySQL.
+ * </p>
+ *
+ * @author Jernej Jerin
  */
 public class PollingDriver {
-    public static void setupDriver(String connectURI) throws Exception {
-        //
+    private final static Logger LOGGER = Logger.getLogger(PollingDriver.class.getName());
+
+    /**
+     * Setup MySQL driver using passed parameters.
+     *
+     * @param connectURI Connection string to the MySQL DB.
+     * @param userDB Username of the MySQL DB.
+     * @param passDB Password of the MySQL DB.
+     * @throws Exception
+     */
+    public static void setupDriver(String connectURI, String userDB, String passDB) throws Exception {
         // First we load the underlying JDBC driver.
         // You need this if you don't use the jdbc.drivers
         // system property.
-        //
-        System.out.println("Loading underlying JDBC driver.");
+        LOGGER.log(Level.INFO, "Started setting up driver.");
         try {
             Class.forName("com.mysql.jdbc.Driver");
         } catch (ClassNotFoundException e) {
@@ -32,7 +46,7 @@ public class PollingDriver {
         // arguments.
         //
         ConnectionFactory connectionFactory =
-                new DriverManagerConnectionFactory(connectURI, "root", "jrj18ene9891");
+                new DriverManagerConnectionFactory(connectURI, userDB, passDB);
 
         //
         // Next, we'll create the PoolableConnectionFactory, which wraps
@@ -64,24 +78,34 @@ public class PollingDriver {
         //
         // ...and register our pool with it.
         //
-        driver.registerPool("example",connectionPool);
-
-        //
-        // Now we can just use the connect string "jdbc:apache:commons:dbcp:example"
-        // to access our pool of Connections.
-        //
+        driver.registerPool("taxi", connectionPool);
+        LOGGER.log(Level.INFO, "Finished setting up driver.");
     }
 
+    /**
+     * <p>
+     * Get status of the registered pool.
+     * </p>
+     *
+     * @throws Exception
+     */
     public static void printDriverStats() throws Exception {
         PoolingDriver driver = (PoolingDriver) DriverManager.getDriver("jdbc:apache:commons:dbcp:");
-        ObjectPool<? extends Connection> connectionPool = driver.getConnectionPool("example");
+        ObjectPool<? extends Connection> connectionPool = driver.getConnectionPool("taxi");
 
         System.out.println("NumActive: " + connectionPool.getNumActive());
         System.out.println("NumIdle: " + connectionPool.getNumIdle());
     }
 
+    /**
+     * <p>
+     * Shutdown driver for pool taxi.
+     * </p>
+     *
+     * @throws Exception
+     */
     public static void shutdownDriver() throws Exception {
         PoolingDriver driver = (PoolingDriver) DriverManager.getDriver("jdbc:apache:commons:dbcp:");
-        driver.closePool("example");
+        driver.closePool("taxi");
     }
 }
