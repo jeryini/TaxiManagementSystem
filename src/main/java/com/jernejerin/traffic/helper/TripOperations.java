@@ -79,16 +79,11 @@ public class TripOperations {
         trip.setDelay(delay);
 
         // does the coordinate for pickup location lie inside grid
-        if (Cell.inGrid(trip.getPickupLatitude(), trip.getPickupLongitude()) &&
-                Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
+//        if (Cell.inGrid(trip.getPickupLatitude(), trip.getPickupLongitude()) &&
+//                Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
             trip.setRoute(new Route(new Cell(trip.getDropOffLatitude(), trip.getDropOffLongitude()),
                     new Cell(trip.getPickupLatitude(), trip.getPickupLongitude())));
-        }
-
-        // does the coordinate for drop off location lie inside grid
-        if (Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
-
-        }
+//        }
 
         LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
                 trip.toString() + " from thread = " + Thread.currentThread());

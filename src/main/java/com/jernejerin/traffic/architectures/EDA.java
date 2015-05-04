@@ -1,5 +1,7 @@
 package com.jernejerin.traffic.architectures;
 
+import com.aliasi.util.BoundedPriorityQueue;
+import com.jernejerin.traffic.entities.Route;
 import com.jernejerin.traffic.entities.Trip;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
@@ -15,6 +17,11 @@ import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
 import reactor.rx.Streams;
 
+import java.time.ZoneOffset;
+import java.util.Comparator;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -55,8 +62,11 @@ public class EDA {
     private final static int PROCESSORS = Runtime.getRuntime().availableProcessors();
     private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
 
-    // TODO (Jernej Jerin): We want route as key and route last drop off date time as list
-//    private final static ConcurrentMap<>
+    // initial table size is 1e5
+    private final static ConcurrentMap<Route, Queue<Long>> routeMap = new ConcurrentHashMap<>(100000, 0.75f, PROCESSORS);
+
+    // a concurrent priority queue for top 10 routes
+    private final static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.log(Level.INFO, "Starting EDA solution from thread = " + Thread.currentThread());
@@ -120,10 +130,16 @@ public class EDA {
 
 //                if (trip == null || trip)
                 // pass forward trip as new event
+//                if (trip.getRoute() == null)
+
                 return trip;
             })
-            // parallelize stream tasks to threads
-            .groupBy(t -> t.hashCode() % PROCESSORS)
+            // parallelize stream tasks by route hash code
+            // TODO (Jernej Jerin): Does this mean that the same routes will always go to the same thread?
+            // TODO (Jernej Jerin): We could do MAP/REDUCE, where each of the thread would operate on a map of
+            // TODO (Jernej Jerin): routes and maintain the list of top 10 routes. Then we would combine these top
+            // TODO (Jernej Jerin): routes. These way we do not need synchronized data structures.
+            .groupBy(t -> t.getRoute().hashCode() % PROCESSORS)
             .consume(stream -> {
                 stream.dispatchOn(Environment.newCachedDispatchers(PROCESSORS).get())
                         // I/O intensive operations
@@ -132,9 +148,16 @@ public class EDA {
                             TripOperations.insertTrip(t);
                             return t;
                         })
-                        // query 1: Frequent routes
-                        .map(bt -> {
-                            return bt;
+                                // query 1: Frequent routes
+                        .map(t -> {
+                            // get value in map or default value which is empty queue
+                            Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
+                            dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
+                            routeMap.put(t.getRoute(), dropOff);
+
+                            top10.offer(t.getRoute());
+
+                            return t;
                         })
                                 // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
                         .map(bt -> {
@@ -145,7 +168,7 @@ public class EDA {
             });
 
         // read the stream from file: for local testing
-//        taxiStream.readStream();
+        taxiStream.readStream();
 
         Thread.sleep(Long.MAX_VALUE);
     }

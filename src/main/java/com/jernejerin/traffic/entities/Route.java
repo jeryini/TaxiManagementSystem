@@ -3,6 +3,8 @@ package com.jernejerin.traffic.entities;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.Queue;
 
@@ -14,7 +16,7 @@ import java.util.Queue;
  *
  * @author Jernej Jerin
  */
-public class Route {
+public class Route implements Comparable<Route> {
     private Queue<Long> dropOff;
     private Cell startCell;
     private Cell endCell;
@@ -65,7 +67,7 @@ public class Route {
      * Compute equals by using Apache Commons Lang EqualsBuilder.
      */
     public boolean equals(Object obj) {
-        if (!(obj instanceof Cell))
+        if (!(obj instanceof Route))
             return false;
         if (obj == this)
             return true;
@@ -75,5 +77,10 @@ public class Route {
                 .append(this.startCell, route.startCell)
                 .append(this.endCell, route.endCell)
                 .isEquals();
+    }
+
+    @Override
+    public int compareTo(Route route) {
+        return (this.dropOff.size() < route.dropOff.size()) ? -1: (this.dropOff.size() > route.dropOff.size()) ? 1 : 0;
     }
 }
