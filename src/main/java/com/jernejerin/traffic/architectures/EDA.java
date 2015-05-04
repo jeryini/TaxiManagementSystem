@@ -8,11 +8,14 @@ import com.jernejerin.traffic.helper.TripOperations;
 import org.apache.commons.cli.*;
 
 import reactor.Environment;
+import reactor.fn.tuple.Tuple;
+import reactor.fn.tuple.Tuple2;
 import reactor.io.codec.StandardCodecs;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
 import reactor.rx.Streams;
 
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -51,6 +54,9 @@ public class EDA {
     /** The number of available processors for the JVM. */
     private final static int PROCESSORS = Runtime.getRuntime().availableProcessors();
     private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
+
+    // TODO (Jernej Jerin): We want route as key and route last drop off date time as list
+//    private final static ConcurrentMap<>
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.log(Level.INFO, "Starting EDA solution from thread = " + Thread.currentThread());
@@ -98,40 +104,44 @@ public class EDA {
         // processing through streams, where number of threads is the same as number of cores
         taxiStream.getTrips().log("broadcaster")
             .map(t -> {
+                // create a tuple of string trip and current time for computing delay
+                // As this is our entry point it is appropriate to start the time here,
+                // before any parsing is being done. This also in record with the Grand
+                // challenge recommendation
+                Tuple2<String, Long> tripTime = Tuple.of(t, System.currentTimeMillis());
                 LOGGER.log(Level.INFO, "Distributing for ticket = " +
                         t + " from thread = " + Thread.currentThread());
-            return t;
+                return tripTime;
+            })
+            // parsing and validating trip structure
+            .map(t -> {
+                // parse, validate and return ticket object
+                Trip trip = TripOperations.parseValidateTrip(t.getT1(), t.getT2());
+
+//                if (trip == null || trip)
+                // pass forward trip as new event
+                return trip;
             })
             // parallelize stream tasks to threads
             .groupBy(t -> t.hashCode() % PROCESSORS)
             .consume(stream -> {
-                // Read this: https://groups.google.com/d/msg/reactor-framework/JO0hGftOaZs/20IhESjPQI0J
-                // Also: https://groups.google.com/forum/#!searchin/reactor-framework/findOne/reactor-framework/ldOfjEsQzio/MeLVWhrCDOAJ
                 stream.dispatchOn(Environment.newCachedDispatchers(PROCESSORS).get())
-                    // parsing and validating trip structure
-                    .map(t -> {
-                        // parse, validate and return ticket object
-                        Trip trip = TripOperations.parseValidateTrip(t);
-
-                        // pass forward trip as new event
-                        return trip;
-                    })
-                    // I/O intensive operations
-                    .map(t -> {
-                        // save ticket
-                        TripOperations.insertTrip(t);
-                        return t;
-                    })
-                    // TODO (Jernej Jerin): Add CPU intensive task for query 1: Frequent routes
-                    .map(bt -> {
-                        return bt;
-                    })
-                    // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
-                    .map(bt -> {
-                        return bt;
-                    })
-                .consume(bt -> {
-                });
+                        // I/O intensive operations
+                        .map(t -> {
+                            // save ticket
+                            TripOperations.insertTrip(t);
+                            return t;
+                        })
+                        // query 1: Frequent routes
+                        .map(bt -> {
+                            return bt;
+                        })
+                                // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
+                        .map(bt -> {
+                            return bt;
+                        })
+                        .consume(bt -> {
+                        });
             });
 
         // read the stream from file: for local testing
