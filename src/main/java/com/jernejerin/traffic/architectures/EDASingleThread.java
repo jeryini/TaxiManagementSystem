@@ -6,9 +6,7 @@ import com.jernejerin.traffic.entities.Trip;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
-
 import org.apache.commons.cli.*;
-
 import reactor.Environment;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
@@ -17,23 +15,25 @@ import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
 import reactor.rx.Streams;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.net.URL;
 import java.time.ZoneOffset;
-import java.util.Comparator;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
  * <p>
- * An example of event driven architecture - EDA.
+ * An example of single threaded event driven architecture - EDA.
  * </p>
  *
  * @author Jernej Jerin
  */
-public class EDA {
+public class EDASingleThread {
     /** The default hostname of the TCP server. */
     private static String hostTCP = "localhost";
 
@@ -55,24 +55,30 @@ public class EDA {
     /** The default schema name to use. */
     private static String schemaDB = "taxi_trip_management";
 
-    /** The default file name. */
+    /** The default input file name. */
     private static String fileName = "trips_example.csv";
 
-    /** The number of available processors for the JVM. */
-    private final static int PROCESSORS = Runtime.getRuntime().availableProcessors();
-    private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
+    /** The default output file path and name. */
+    private static String  fileNamePathQuery1 = "./query1_frequent_routes.txt";
+
+    private static File fileQuery1;
+
+    private final static Logger LOGGER = Logger.getLogger(EDASingleThread.class.getName());
 
     // initial table size is 1e5
-    private final static ConcurrentMap<Route, Queue<Long>> routeMap = new ConcurrentHashMap<>(100000, 0.75f, PROCESSORS);
+    private final static Map<Route, Queue<Long>> routeMap = new HashMap<>(100000);
 
-    // a concurrent priority queue for top 10 routes
+    // a priority queue for top 10 routes. Orders by natural number.
     private final static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
 
     public static void main(String[] args) throws InterruptedException {
-        LOGGER.log(Level.INFO, "Starting EDA solution from thread = " + Thread.currentThread());
+        LOGGER.log(Level.INFO, "Starting single threaded EDA solution from thread = " + Thread.currentThread());
 
         // set host and port from command line options
         setOptionsCmd(args);
+
+        // output file
+        fileQuery1 = new File(fileNamePathQuery1);
 
         // environment initialization
         Environment env = Environment.initializeIfEmpty().assignErrorJournal();
@@ -134,38 +140,58 @@ public class EDA {
 
                 return trip;
             })
-            // parallelize stream tasks by route hash code
-            // TODO (Jernej Jerin): Does this mean that the same routes will always go to the same thread?
-            // TODO (Jernej Jerin): We could do MAP/REDUCE, where each of the thread would operate on a map of
-            // TODO (Jernej Jerin): routes and maintain the list of top 10 routes. Then we would combine these top
-            // TODO (Jernej Jerin): routes. These way we do not need synchronized data structures.
-            .groupBy(t -> t.getRoute().hashCode() % PROCESSORS)
-            .consume(stream -> {
-                stream.dispatchOn(Environment.newCachedDispatchers(PROCESSORS).get())
-                        // I/O intensive operations
-                        .map(t -> {
-                            // save ticket
-                            TripOperations.insertTrip(t);
-                            return t;
-                        })
-                                // TODO (Jernej Jerin): Build single threaded EDA architecture.
-                                // query 1: Frequent routes
-                        .map(t -> {
-                            // get value in map or default value which is empty queue
-                            Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
-                            dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
-                            routeMap.put(t.getRoute(), dropOff);
+//            .map(t -> {
+//                // save ticket
+//                TripOperations.insertTrip(t);
+//                return t;
+//            })
+            // query 1: Frequent routes
+            .map(t -> {
+                // get value in map or default value which is empty queue
+                Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
 
-                            top10.offer(t.getRoute());
+                // set the latest timestamp
+                dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
+                t.getRoute().setDropOff(dropOff);
+                routeMap.put(t.getRoute(), dropOff);
 
-                            return t;
-                        })
-                                // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
-                        .map(bt -> {
-                            return bt;
-                        })
-                        .consume(bt -> {
-                        });
+                // try to add it to top 10 of the frequent routes. These are sorted by drop off size.
+                boolean changed = top10.offer(t.getRoute());
+
+                List<Route> routes = new LinkedList<Route>(top10);
+
+                return Tuple.of(changed, t.getPickupDatetime(), t.getDropOffDatetime(), routes, t.getDelay());
+            })
+            // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
+//            .map(bt -> {
+//                return bt;
+//            })
+            .consume(ct -> {
+                // write to file stream if the top 10 queue was changed
+                if (ct.getT1()) {
+                    ct.getT4().sort(Comparator.<Route>naturalOrder());
+
+                    // build content string for output
+                    String content = ct.getT2().toString() + ", " + ct.getT3().toString() + ", ";
+
+                    // iterate over all the most frequent routes
+                    for (Route route : ct.getT4()) {
+                        content += route.getStartCell().getEast() + "." + route.getStartCell().getSouth() +
+                                ", " + route.getEndCell().getEast() + "." + route.getEndCell().getSouth() + ", ";
+                    }
+
+                    // add a delay
+                    content += System.currentTimeMillis() - ct.getT5() + "\n";
+
+                    try (FileOutputStream fop = new FileOutputStream(fileQuery1, true)) {
+                        // write to file
+                        fop.write(content.getBytes());
+                        fop.flush();
+                        fop.close();
+                    } catch (IOException ex) {
+                        LOGGER.log(Level.SEVERE, ex.getMessage());
+                    }
+                }
             });
 
         // read the stream from file: for local testing
