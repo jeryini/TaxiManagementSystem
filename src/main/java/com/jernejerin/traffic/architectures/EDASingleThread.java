@@ -168,6 +168,12 @@ public class EDASingleThread {
                                         routeMap.forEach((r, s) -> {
                                             while (s.peek() != null && s.peek() < dropOffTimestamp - 30 * 60 * 1000) {
                                                 s.poll();
+                                                // check if route is in top 10 routes. If it is, then we need to
+                                                // reinsert this route into top 10
+                                                if (top10.contains(r)) {
+                                                    top10.remove(r);
+                                                    top10.offer(r);
+                                                }
                                             }
                                         });
 
@@ -179,6 +185,7 @@ public class EDASingleThread {
                                         // TODO (Jernej Jerin): Better to maintain separate set for inserting routes
                                         // TODO (Jernej Jerin): into the top10 list
                                         top10.remove(t.getRoute());
+                                        Route route = top10.peekLast();
                                         changed = top10.offer(t.getRoute());
 
                                         List<Route> routes = new LinkedList<Route>(top10);
