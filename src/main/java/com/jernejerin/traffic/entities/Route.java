@@ -107,11 +107,6 @@ public class Route implements Comparable<Route> {
             Answer: You should always put the freshest information first. E.g. if route A and B have the same
             frequency, put the route with the freshest input information fist (i.e. the one which includes
             the freshest event).*/
-//        if (this.dropOff.size() < route.dropOff.size())
-//            return -1;
-//        else if (this.dropOff.size() > route.dropOff.size())
-//            return 1;
-//        else {
         if (this.dropOffSize < route.dropOffSize)
             return -1;
         else if (this.dropOffSize > route.dropOffSize)
@@ -119,14 +114,6 @@ public class Route implements Comparable<Route> {
         else {
                 // if contains drop off timestamps, order by last timestamp in drop off
                 // the highest timestamp has preceding
-//                if (this.dropOff.size() > 0) {
-//                    if (this.dropOff.peek() < route.dropOff.peek())
-//                        return -1;
-//                    else if (this.dropOff.peek() > route.dropOff.peek())
-//                        return 1;
-//                    else
-//                        return 0;
-//                }
             if (this.lastUpdated < route.lastUpdated)
                 return -1;
             else if (this.lastUpdated > route.lastUpdated)
@@ -134,6 +121,5 @@ public class Route implements Comparable<Route> {
             else
                 return 0;
         }
-//        return (this.dropOff.size() < route.dropOff.size()) ? -1: (this.dropOff.size() > route.dropOff.size()) ? 1 : 0;
     }
 }

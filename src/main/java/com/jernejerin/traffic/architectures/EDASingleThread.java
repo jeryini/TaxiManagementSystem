@@ -155,11 +155,22 @@ public class EDASingleThread {
                                         // get value in map or default value which is empty queue
                                         LinkedBlockingQueue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
 
+                                        long dropOffTimestamp = t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000;
                                         // set the latest timestamp
-                                        dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
+                                        dropOff.add(dropOffTimestamp);
                                         t.getRoute().setDropOff(dropOff);
                                         t.getRoute().setDropOffSize(dropOff.size());
                                         routeMap.put(t.getRoute(), dropOff);
+
+                                        // check for all the routes if there are any events leaving the window
+                                        // this is done by comparing current trip drop off time minus 30 min
+                                        // with the head of the drop off
+                                        routeMap.forEach((r, s) -> {
+                                            while (s.peek() != null && s.peek() < dropOffTimestamp - 30 * 60 * 1000) {
+                                                s.poll();
+                                            }
+                                        });
+
 
                                         // try to add it to top 10 of the frequent routes.
                                         // These are sorted by drop off size and latest drop off timestamps
