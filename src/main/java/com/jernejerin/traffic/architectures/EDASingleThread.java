@@ -22,7 +22,9 @@ import java.net.URL;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -66,12 +68,15 @@ public class EDASingleThread {
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread.class.getName());
 
     // initial table size is 1e5
-    private final static Map<Route, Queue<Long>> routeMap = new HashMap<>(100000);
+    private static Map<Route, LinkedBlockingQueue<Long>> routeMap = new HashMap<>(100000);
 
     // a priority queue for top 10 routes. Orders by natural number.
-    private final static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
+    private static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
 
     public static void main(String[] args) throws InterruptedException {
+
+
+
         LOGGER.log(Level.INFO, "Starting single threaded EDA solution from thread = " + Thread.currentThread());
 
         // set host and port from command line options
@@ -130,67 +135,89 @@ public class EDASingleThread {
                 return tripTime;
             })
             // parsing and validating trip structure
-            .map(t -> {
-                // parse, validate and return ticket object
-                Trip trip = TripOperations.parseValidateTrip(t.getT1(), t.getT2());
+            .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
+            // group by trip validation
+            .groupBy(t -> t != null)
+            .consume(tripValidStream -> {
+                // if trip is valid continue with operations on the trip
+                if (tripValidStream.key()) {
+                    tripValidStream
+                        .map(t -> {
+                            // save ticket
+//                            TripOperations.insertTrip(t);
+                            return t;
+                        })
+                        // group by if route for the trip is valid, as
+                        // we need route in follow up operations
+                        .groupBy(t -> t.getRoute() != null)
+                        .consume(routeValidStream -> {
+                            if (routeValidStream.key()) {
+                                routeValidStream
+                                    // query 1: Frequent routes
+                                    .map(t -> {
+                                        // get value in map or default value which is empty queue
+                                        LinkedBlockingQueue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
 
-//                if (trip == null || trip)
-                // pass forward trip as new event
-//                if (trip.getRoute() == null)
+                                        // set the latest timestamp
+                                        dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
+                                        t.getRoute().setDropOff(dropOff);
+                                        routeMap.put(t.getRoute(), dropOff);
 
-                return trip;
-            })
-//            .map(t -> {
-//                // save ticket
-//                TripOperations.insertTrip(t);
-//                return t;
-//            })
-            // query 1: Frequent routes
-            .map(t -> {
-                // get value in map or default value which is empty queue
-                Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
+                                        // try to add it to top 10 of the frequent routes.
+                                        // These are sorted by drop off size and latest drop off timestamps
+                                        boolean changed = false;
 
-                // set the latest timestamp
-                dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
-                t.getRoute().setDropOff(dropOff);
-                routeMap.put(t.getRoute(), dropOff);
+                                        // TODO (Jernej Jerin): Better to maintain separate set for inserting routes
+                                        // TODO (Jernej Jerin): into the top10 list
+                                        top10.remove(t.getRoute());
+                                        changed = top10.offer(t.getRoute());
 
-                // try to add it to top 10 of the frequent routes. These are sorted by drop off size.
-                boolean changed = top10.offer(t.getRoute());
+                                        List<Route> routes = new LinkedList<Route>(top10);
 
-                List<Route> routes = new LinkedList<Route>(top10);
+                                        return Tuple.of(changed, t.getPickupDatetime(), t.getDropOffDatetime(),
+                                                routes, t.getTimestampReceived());
+                                    })
+                                    // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
+                                    //            .map(bt -> {
+                                    //                return bt;
+                                    //            })
+                                    .consume(ct -> {
+                                        // write to file stream if the top 10 queue was changed
+                                        if (ct.getT1()) {
+                                            ct.getT4().sort(Comparator.<Route>reverseOrder());
 
-                return Tuple.of(changed, t.getPickupDatetime(), t.getDropOffDatetime(), routes, t.getDelay());
-            })
-            // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
-//            .map(bt -> {
-//                return bt;
-//            })
-            .consume(ct -> {
-                // write to file stream if the top 10 queue was changed
-                if (ct.getT1()) {
-                    ct.getT4().sort(Comparator.<Route>naturalOrder());
+                                            // build content string for output
+                                            String content = ct.getT2().toString() + ", " + ct.getT3().toString() + ", ";
 
-                    // build content string for output
-                    String content = ct.getT2().toString() + ", " + ct.getT3().toString() + ", ";
+                                            // iterate over all the most frequent routes
+                                            for (Route route : ct.getT4()) {
+                                                content += route.getStartCell().getEast() + "." + route.getStartCell().getSouth() +
+                                                        ", " + route.getEndCell().getEast() + "." + route.getEndCell().getSouth() + ", ";
+                                            }
 
-                    // iterate over all the most frequent routes
-                    for (Route route : ct.getT4()) {
-                        content += route.getStartCell().getEast() + "." + route.getStartCell().getSouth() +
-                                ", " + route.getEndCell().getEast() + "." + route.getEndCell().getSouth() + ", ";
-                    }
+                                            // add a delay
+                                            content += System.currentTimeMillis() - ct.getT5() + "\n";
 
-                    // add a delay
-                    content += System.currentTimeMillis() - ct.getT5() + "\n";
-
-                    try (FileOutputStream fop = new FileOutputStream(fileQuery1, true)) {
-                        // write to file
-                        fop.write(content.getBytes());
-                        fop.flush();
-                        fop.close();
-                    } catch (IOException ex) {
-                        LOGGER.log(Level.SEVERE, ex.getMessage());
-                    }
+                                            try (FileOutputStream fop = new FileOutputStream(fileQuery1, true)) {
+                                                // write to file
+                                                fop.write(content.getBytes());
+                                                fop.flush();
+                                                fop.close();
+                                            } catch (IOException ex) {
+                                                LOGGER.log(Level.SEVERE, ex.getMessage());
+                                            }
+                                        }
+                                    });
+                            } else {
+                                routeValidStream.consume(trip ->
+                                                LOGGER.log(Level.WARNING, "Route is not valid for trip!")
+                                );
+                            }
+                        });
+                } else {
+                    tripValidStream.consume(trip ->
+                                    LOGGER.log(Level.WARNING, "Invalid trip passed in!")
+                    );
                 }
             });
 

@@ -41,10 +41,10 @@ public class TripOperations {
      *  - objects: null
      *
      * @param tripValues comma delimited string representing Trip to check
-     * @param delay Delay of the current trip
+     * @param timestampReceived Timestamp when the event was received
      * @return a Trip with erroneous values set to MIN_VALUE, or null if whole trip was malformed
      */
-    public static Trip parseValidateTrip(String tripValues, long delay) {
+    public static Trip parseValidateTrip(String tripValues, long timestampReceived) {
         LOGGER.log(Level.INFO, "Started parsing and validating trip = " +
                 tripValues + " from thread = " + Thread.currentThread());
 
@@ -76,14 +76,14 @@ public class TripOperations {
         trip.setTipAmount(NumberUtils.toDouble(tripSplit[14], Double.MIN_VALUE));
         trip.setTollsAmount(NumberUtils.toDouble(tripSplit[15], Double.MIN_VALUE));
         trip.setTotalAmount(NumberUtils.toDouble(tripSplit[16], Double.MIN_VALUE));
-        trip.setDelay(delay);
+        trip.setTimestampReceived(timestampReceived);
 
         // does the coordinate for pickup location lie inside grid
-//        if (Cell.inGrid(trip.getPickupLatitude(), trip.getPickupLongitude()) &&
-//                Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
+        if (Cell.inGrid(trip.getPickupLatitude(), trip.getPickupLongitude()) &&
+                Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
             trip.setRoute(new Route(new Cell(trip.getDropOffLatitude(), trip.getDropOffLongitude()),
-                    new Cell(trip.getPickupLatitude(), trip.getPickupLongitude())));
-//        }
+                    new Cell(trip.getPickupLatitude(), trip.getPickupLongitude()), timestampReceived));
+        }
 
         LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
                 trip.toString() + " from thread = " + Thread.currentThread());
@@ -108,7 +108,7 @@ public class TripOperations {
             insertTrip = conn.prepareStatement("insert into trip (medallion, hack_license, pickup_datetime, " +
                     "dropoff_datetime, trip_time, trip_distance, pickup_longitude, pickup_latitude, dropoff_longitude, " +
                     "dropoff_latitude, payment_type, fare_amount, surcharge, mta_tax, tip_amount, tolls_amount, " +
-                    "total_amount, time) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    "total_amount, timestampReceived) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
             insertTrip.setString(1, trip.getMedallion());
             insertTrip.setString(2, trip.getHackLicense());
@@ -127,7 +127,7 @@ public class TripOperations {
             insertTrip.setDouble(15, trip.getTipAmount());
             insertTrip.setDouble(16, trip.getTollsAmount());
             insertTrip.setDouble(17, trip.getTotalAmount());
-            insertTrip.setLong(18, trip.getDelay());
+            insertTrip.setLong(18, trip.getTimestampReceived());
 
             insertTrip.execute();
         } catch (SQLException e) {

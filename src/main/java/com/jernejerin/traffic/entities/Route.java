@@ -7,6 +7,8 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
  * <p>
@@ -17,21 +19,31 @@ import java.util.Queue;
  * @author Jernej Jerin
  */
 public class Route implements Comparable<Route> {
-    private Queue<Long> dropOff;
+    private long lastUpdated;
+    private LinkedBlockingQueue<Long> dropOff;
     private Cell startCell;
     private Cell endCell;
 
-    public Route(Cell startCell, Cell endCell) {
+    public Route(Cell startCell, Cell endCell, long lastUpdated) {
+        this.lastUpdated = lastUpdated;
         this.startCell = startCell;
         this.endCell = endCell;
-        this.dropOff = new LinkedList<>();
+        this.dropOff = new LinkedBlockingQueue<>();
     }
 
-    public Queue<Long> getDropOff() {
+    public long getLastUpdated() {
+        return this.lastUpdated;
+    }
+
+    public void setLastUpdated(long lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
+    public LinkedBlockingQueue<Long> getDropOff() {
         return dropOff;
     }
 
-    public void setDropOff(Queue<Long> dropOff) {
+    public void setDropOff(LinkedBlockingQueue<Long> dropOff) {
         this.dropOff = dropOff;
     }
 
@@ -81,6 +93,32 @@ public class Route implements Comparable<Route> {
 
     @Override
     public int compareTo(Route route) {
-        return (this.dropOff.size() < route.dropOff.size()) ? -1: (this.dropOff.size() > route.dropOff.size()) ? 1 : 0;
+        /* Question 7: How should we order elements in a list that have the same value for the ordering criterion?
+            Answer: You should always put the freshest information first. E.g. if route A and B have the same
+            frequency, put the route with the freshest input information fist (i.e. the one which includes
+            the freshest event).*/
+        if (this.dropOff.size() < route.dropOff.size())
+            return -1;
+        else if (this.dropOff.size() > route.dropOff.size())
+            return 1;
+        else {
+                // if contains drop off timestamps, order by last timestamp in drop off
+                // the highest timestamp has preceding
+//                if (this.dropOff.size() > 0) {
+//                    if (this.dropOff.peek() < route.dropOff.peek())
+//                        return -1;
+//                    else if (this.dropOff.peek() > route.dropOff.peek())
+//                        return 1;
+//                    else
+//                        return 0;
+//                }
+            if (this.lastUpdated < route.lastUpdated)
+                return -1;
+            else if (this.lastUpdated > route.lastUpdated)
+                return 1;
+            else
+                return 0;
+        }
+//        return (this.dropOff.size() < route.dropOff.size()) ? -1: (this.dropOff.size() > route.dropOff.size()) ? 1 : 0;
     }
 }

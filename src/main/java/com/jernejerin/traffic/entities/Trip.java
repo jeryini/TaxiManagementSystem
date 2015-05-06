@@ -30,7 +30,7 @@ public class Trip {
     private double tipAmount;  // tip in dollars
     private double tollsAmount; // bridge and tunnel tolls in dollars
     private double totalAmount; // total paid amount in dollars
-    private long delay; // the attribute “delay” captures the time delay between reading the input
+    private long timestampReceived; // timestamp in milliseconds when we received the event
     // event that triggered the output and the time when the output is produced
     private Route route;    // route between start cell and end cell
 
@@ -201,12 +201,12 @@ public class Trip {
         this.totalAmount = totalAmount;
     }
 
-    public long getDelay() {
-        return this.delay;
+    public long getTimestampReceived() {
+        return this.timestampReceived;
     }
 
-    public void setDelay(long delay) {
-        this.delay = delay;
+    public void setTimestampReceived(long timestampReceived) {
+        this.timestampReceived = timestampReceived;
     }
 
     public Route getRoute() {

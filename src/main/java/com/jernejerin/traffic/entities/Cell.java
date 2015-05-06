@@ -21,17 +21,18 @@ import reactor.fn.tuple.Tuple2;
  * @author Jernej Jerin
  */
 public class Cell {
+    // 0.004491556° represents 500m
     private static final Tuple2<Double, Double> TOP_LEFT = Tuple.of(41.474937 + 0.004491556 / 2,
             -74.913585 - 0.005986 / 2);
     private static final Tuple2<Double, Double> BOTTOM_RIGHT = Tuple.of(TOP_LEFT.getT1() - 300 * 0.004491556,
-            TOP_LEFT.getT2() - 300 * 0.005986);
+            TOP_LEFT.getT2() + 300 * 0.005986);
 
     private int east;
     private int south;
 
     public Cell(double latitude, double longitude) {
         this.east = (int)((TOP_LEFT.getT1() - latitude) / 0.004491556);
-        this.south = (int)((TOP_LEFT.getT2() - longitude) / 0.005986);
+        this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
     }
 
     public int getEast() {
@@ -59,8 +60,8 @@ public class Cell {
      * @return a boolean value if the coordinate lies inside grid
      */
     public static boolean inGrid(double latitude, double longitude) {
-        return latitude >= TOP_LEFT.getT1() && longitude >= TOP_LEFT.getT2() &&
-                latitude <= BOTTOM_RIGHT.getT1() && longitude <= BOTTOM_RIGHT.getT2();
+        return latitude <= TOP_LEFT.getT1() && longitude >= TOP_LEFT.getT2() &&
+                latitude >= BOTTOM_RIGHT.getT1() && longitude <= BOTTOM_RIGHT.getT2();
     }
 
     @Override
