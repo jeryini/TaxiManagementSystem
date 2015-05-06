@@ -74,9 +74,6 @@ public class EDASingleThread {
     private static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
 
     public static void main(String[] args) throws InterruptedException {
-
-
-
         LOGGER.log(Level.INFO, "Starting single threaded EDA solution from thread = " + Thread.currentThread());
 
         // set host and port from command line options
@@ -161,6 +158,7 @@ public class EDASingleThread {
                                         // set the latest timestamp
                                         dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
                                         t.getRoute().setDropOff(dropOff);
+                                        t.getRoute().setDropOffSize(dropOff.size());
                                         routeMap.put(t.getRoute(), dropOff);
 
                                         // try to add it to top 10 of the frequent routes.
@@ -192,7 +190,7 @@ public class EDASingleThread {
                                             // iterate over all the most frequent routes
                                             for (Route route : ct.getT4()) {
                                                 content += route.getStartCell().getEast() + "." + route.getStartCell().getSouth() +
-                                                        ", " + route.getEndCell().getEast() + "." + route.getEndCell().getSouth() + ", ";
+                                                        ", " + route.getEndCell().getEast() + "." + route.getEndCell().getSouth() + " (" + route.getDropOffSize() + "), ";
                                             }
 
                                             // add a delay

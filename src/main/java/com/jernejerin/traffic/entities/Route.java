@@ -21,6 +21,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class Route implements Comparable<Route> {
     private long lastUpdated;
     private LinkedBlockingQueue<Long> dropOff;
+    private int dropOffSize;
     private Cell startCell;
     private Cell endCell;
 
@@ -29,6 +30,7 @@ public class Route implements Comparable<Route> {
         this.startCell = startCell;
         this.endCell = endCell;
         this.dropOff = new LinkedBlockingQueue<>();
+        this.dropOffSize = 0;
     }
 
     public long getLastUpdated() {
@@ -45,6 +47,14 @@ public class Route implements Comparable<Route> {
 
     public void setDropOff(LinkedBlockingQueue<Long> dropOff) {
         this.dropOff = dropOff;
+    }
+
+    public void setDropOffSize(int dropOffSize) {
+        this.dropOffSize = dropOffSize;
+    }
+
+    public int getDropOffSize() {
+        return this.dropOffSize;
     }
 
     public Cell getStartCell() {
@@ -97,9 +107,14 @@ public class Route implements Comparable<Route> {
             Answer: You should always put the freshest information first. E.g. if route A and B have the same
             frequency, put the route with the freshest input information fist (i.e. the one which includes
             the freshest event).*/
-        if (this.dropOff.size() < route.dropOff.size())
+//        if (this.dropOff.size() < route.dropOff.size())
+//            return -1;
+//        else if (this.dropOff.size() > route.dropOff.size())
+//            return 1;
+//        else {
+        if (this.dropOffSize < route.dropOffSize)
             return -1;
-        else if (this.dropOff.size() > route.dropOff.size())
+        else if (this.dropOffSize > route.dropOffSize)
             return 1;
         else {
                 // if contains drop off timestamps, order by last timestamp in drop off
