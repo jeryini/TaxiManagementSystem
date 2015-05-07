@@ -11,6 +11,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  * <p>
  * A route between start cell and end cell. It stores the list of all the current trip timestamps for the given
  * window.
+ *
+ * <b>Note: this class has a natural ordering that is inconsistent with equals.</b>
  * </p>
  *
  * @author Jernej Jerin

@@ -35,6 +35,11 @@ public class Cell {
         this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
     }
 
+    public Cell(int east, int south) {
+        this.east = east;
+        this.south = south;
+    }
+
     public int getEast() {
         return east;
     }

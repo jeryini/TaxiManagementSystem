@@ -68,7 +68,7 @@ public class EDASingleThread {
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread.class.getName());
 
     // initial table size is 1e5
-    private static Map<Integer, Route> routeMap = new LinkedHashMap<>(100000);
+    private static Map<Route, Route> routes = new LinkedHashMap<>(100000);
 
     // current top 10 sorted
     private static LinkedList<Route> top10Previous = new LinkedList<>();
@@ -160,7 +160,7 @@ public class EDASingleThread {
                                         // check for all the routes if there are any events leaving the window.
                                         // This is done by comparing current trip drop off time minus 30 min
                                         // with the head of the drop off for each route
-                                        routeMap.forEach((k, r) -> {
+                                        routes.forEach((k, r) -> {
                                             while (r.getDropOffWindow().peek() != null && r.getDropOffWindow().peek() < dropOffTimestamp - 30 * 60 * 1000) {
                                                 r.getDropOffWindow().poll();
                                                 // update drop off size of the key. We can do that, as
@@ -172,7 +172,7 @@ public class EDASingleThread {
                                             // route map. This way we are only maintaining a map of routes
                                             // active in last 30 minutes
                                             if (r.getDropOffWindow().peek() == null)
-                                                routeMap.remove(k);
+                                                routes.remove(r);
                                             // try to add it to top 10 list. This way we get sorted top 10 with
                                             // time complexity n * log(10) + 10 * log(10) vs. n * log(n)
                                             else
@@ -180,15 +180,15 @@ public class EDASingleThread {
                                         });
 
                                         // get value in map or default value which is current route
-                                        Route route = routeMap.getOrDefault(t.getRoute().hashCode(), t.getRoute());
+                                        Route route = routes.getOrDefault(t.getRoute(), t.getRoute());
 
                                         // set the latest timestamp
                                         route.getDropOffWindow().add(dropOffTimestamp);
                                         route.setDropOffSize(route.getDropOffSize() + 1);
 
-                                        // put if the route was not in the map
+                                        // put if the route was not in the hash
                                         if (route == t.getRoute())
-                                            routeMap.put(route.hashCode(), route);
+                                            routes.put(route, route);
 
                                         // try to add it to top 10 of the frequent routes.
                                         // These are sorted by drop off size and latest drop off window timestamp
