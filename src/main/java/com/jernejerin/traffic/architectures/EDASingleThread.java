@@ -68,10 +68,10 @@ public class EDASingleThread {
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread.class.getName());
 
     // initial table size is 1e5
-    private static Map<Route, LinkedBlockingQueue<Long>> routeMap = new HashMap<>(100000);
+    private static Map<Integer, Route> routeMap = new LinkedHashMap<>(100000);
 
-    // a priority queue for top 10 routes. Orders by natural number.
-    private static BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
+    // current top 10 sorted
+    private static LinkedList<Route> top10Previous = new LinkedList<>();
 
     public static void main(String[] args) throws InterruptedException {
         LOGGER.log(Level.INFO, "Starting single threaded EDA solution from thread = " + Thread.currentThread());
@@ -152,46 +152,60 @@ public class EDASingleThread {
                                 routeValidStream
                                     // query 1: Frequent routes
                                     .map(t -> {
-                                        // get value in map or default value which is empty queue
-                                        LinkedBlockingQueue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
+                                        // a priority queue for top 10 routes. Orders by natural number.
+                                        BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
 
                                         long dropOffTimestamp = t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000;
-                                        // set the latest timestamp
-                                        dropOff.add(dropOffTimestamp);
-                                        t.getRoute().setDropOff(dropOff);
-                                        t.getRoute().setDropOffSize(dropOff.size());
-                                        routeMap.put(t.getRoute(), dropOff);
 
-                                        // check for all the routes if there are any events leaving the window
-                                        // this is done by comparing current trip drop off time minus 30 min
-                                        // with the head of the drop off
-                                        routeMap.forEach((r, s) -> {
-                                            while (s.peek() != null && s.peek() < dropOffTimestamp - 30 * 60 * 1000) {
-                                                s.poll();
-                                                // check if route is in top 10 routes. If it is, then we need to
-                                                // reinsert this route into top 10
-                                                if (top10.contains(r)) {
-                                                    top10.remove(r);
-                                                    top10.offer(r);
-                                                }
+                                        // check for all the routes if there are any events leaving the window.
+                                        // This is done by comparing current trip drop off time minus 30 min
+                                        // with the head of the drop off for each route
+                                        routeMap.forEach((k, r) -> {
+                                            while (r.getDropOffWindow().peek() != null && r.getDropOffWindow().peek() < dropOffTimestamp - 30 * 60 * 1000) {
+                                                r.getDropOffWindow().poll();
+                                                // update drop off size of the key. We can do that, as
+                                                // hash code for the key does not contain attribute drop off size!
+                                                r.setDropOffSize(r.getDropOffSize() - 1);
                                             }
+
+                                            // if the drop off window is empty, then we can remove the element from
+                                            // route map. This way we are only maintaining a map of routes
+                                            // active in last 30 minutes
+                                            if (r.getDropOffWindow().peek() == null)
+                                                routeMap.remove(k);
+                                            // try to add it to top 10 list. This way we get sorted top 10 with
+                                            // time complexity n * log(10) + 10 * log(10) vs. n * log(n)
+                                            else
+                                                top10.offer(r);
                                         });
 
+                                        // get value in map or default value which is current route
+                                        Route route = routeMap.getOrDefault(t.getRoute().hashCode(), t.getRoute());
+
+                                        // set the latest timestamp
+                                        route.getDropOffWindow().add(dropOffTimestamp);
+                                        route.setDropOffSize(route.getDropOffSize() + 1);
+
+                                        // put if the route was not in the map
+                                        if (route == t.getRoute())
+                                            routeMap.put(route.hashCode(), route);
 
                                         // try to add it to top 10 of the frequent routes.
-                                        // These are sorted by drop off size and latest drop off timestamps
-                                        boolean changed = false;
+                                        // These are sorted by drop off size and latest drop off window timestamp
+                                        top10.remove(route);
+                                        top10.offer(route);
 
-                                        // TODO (Jernej Jerin): Better to maintain separate set for inserting routes
-                                        // TODO (Jernej Jerin): into the top10 list
-                                        top10.remove(t.getRoute());
-                                        Route route = top10.peekLast();
-                                        changed = top10.offer(t.getRoute());
+                                        // sort new top 10 routes
+                                        LinkedList<Route> top10SortedNew = new LinkedList<>(top10);
+                                        top10SortedNew.sort(Comparator.<Route>reverseOrder());
 
-                                        List<Route> routes = new LinkedList<Route>(top10);
+                                        // do they contain the same elements in the same order?
+                                        // routes are equal if they have the same start and end cell
+                                        boolean changed = !top10SortedNew.equals(top10Previous);
+                                        top10Previous = top10SortedNew;
 
                                         return Tuple.of(changed, t.getPickupDatetime(), t.getDropOffDatetime(),
-                                                routes, t.getTimestampReceived());
+                                                top10SortedNew, t.getTimestampReceived());
                                     })
                                     // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
                                     //            .map(bt -> {
@@ -200,8 +214,6 @@ public class EDASingleThread {
                                     .consume(ct -> {
                                         // write to file stream if the top 10 queue was changed
                                         if (ct.getT1()) {
-                                            ct.getT4().sort(Comparator.<Route>reverseOrder());
-
                                             // build content string for output
                                             String content = ct.getT2().toString() + ", " + ct.getT3().toString() + ", ";
 

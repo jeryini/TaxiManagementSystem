@@ -3,10 +3,7 @@ package com.jernejerin.traffic.entities;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.LinkedList;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -20,7 +17,8 @@ import java.util.concurrent.LinkedBlockingQueue;
  */
 public class Route implements Comparable<Route> {
     private long lastUpdated;
-    private LinkedBlockingQueue<Long> dropOff;
+    private Deque<Long> dropOffWindow;
+    private Deque<Long> pickUpWindow;
     private int dropOffSize;
     private Cell startCell;
     private Cell endCell;
@@ -29,7 +27,8 @@ public class Route implements Comparable<Route> {
         this.lastUpdated = lastUpdated;
         this.startCell = startCell;
         this.endCell = endCell;
-        this.dropOff = new LinkedBlockingQueue<>();
+        this.dropOffWindow = new ArrayDeque<>();
+        this.pickUpWindow = new ArrayDeque<>();
         this.dropOffSize = 0;
     }
 
@@ -39,22 +38,6 @@ public class Route implements Comparable<Route> {
 
     public void setLastUpdated(long lastUpdated) {
         this.lastUpdated = lastUpdated;
-    }
-
-    public LinkedBlockingQueue<Long> getDropOff() {
-        return dropOff;
-    }
-
-    public void setDropOff(LinkedBlockingQueue<Long> dropOff) {
-        this.dropOff = dropOff;
-    }
-
-    public void setDropOffSize(int dropOffSize) {
-        this.dropOffSize = dropOffSize;
-    }
-
-    public int getDropOffSize() {
-        return this.dropOffSize;
     }
 
     public Cell getStartCell() {
@@ -72,6 +55,32 @@ public class Route implements Comparable<Route> {
     public void setEndCell(Cell endCell) {
         this.endCell = endCell;
     }
+
+    public Queue<Long> getDropOffWindow() {
+        return dropOffWindow;
+    }
+
+    public void setDropOffWindow(ArrayDeque<Long> dropOffWindow) {
+        this.dropOffWindow = dropOffWindow;
+    }
+
+    public Queue<Long> getPickUpWindow() {
+        return pickUpWindow;
+    }
+
+    public void setPickUpWindow(ArrayDeque<Long> pickUpWindow) {
+        this.pickUpWindow = pickUpWindow;
+    }
+
+    public void setDropOffSize(int dropOffSize) {
+        this.dropOffSize = dropOffSize;
+    }
+
+    public int getDropOffSize() {
+        return this.dropOffSize;
+    }
+
+
 
     @Override
     /**

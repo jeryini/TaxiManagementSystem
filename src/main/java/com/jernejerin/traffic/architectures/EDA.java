@@ -152,7 +152,7 @@ public class EDA {
                                 // query 1: Frequent routes
                         .map(t -> {
                             // get value in map or default value which is empty queue
-                            Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOff());
+                            Queue<Long> dropOff = routeMap.getOrDefault(t.getRoute(), t.getRoute().getDropOffWindow());
                             dropOff.add(t.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000);
                             routeMap.put(t.getRoute(), dropOff);
 
