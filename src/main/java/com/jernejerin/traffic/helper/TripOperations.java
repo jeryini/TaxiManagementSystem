@@ -45,8 +45,8 @@ public class TripOperations {
      * @return a Trip with erroneous values set to MIN_VALUE, or null if whole trip was malformed
      */
     public static Trip parseValidateTrip(String tripValues, long timestampReceived) {
-        LOGGER.log(Level.INFO, "Started parsing and validating trip = " +
-                tripValues + " from thread = " + Thread.currentThread());
+//        LOGGER.log(Level.INFO, "Started parsing and validating trip = " +
+//                tripValues + " from thread = " + Thread.currentThread());
 
         // our returned trip
         Trip trip = new Trip();
@@ -85,8 +85,8 @@ public class TripOperations {
                     new Cell(trip.getPickupLatitude(), trip.getPickupLongitude()), timestampReceived));
         }
 
-        LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
-                trip.toString() + " from thread = " + Thread.currentThread());
+//        LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
+//                trip.toString() + " from thread = " + Thread.currentThread());
         return trip;
     }
 

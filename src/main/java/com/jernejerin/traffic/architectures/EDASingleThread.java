@@ -1,8 +1,9 @@
 package com.jernejerin.traffic.architectures;
 
 import com.aliasi.util.BoundedPriorityQueue;
+import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.Route;
-import com.jernejerin.traffic.entities.Trip;
+import com.jernejerin.traffic.entities.Taxi;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
@@ -18,13 +19,8 @@ import reactor.rx.Streams;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URL;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -58,7 +54,7 @@ public class EDASingleThread {
     private static String schemaDB = "taxi_trip_management";
 
     /** The default input file name. */
-    private static String fileName = "trips_example.csv";
+    private static String fileName = "trips_20_days.csv";
 
     /** The default output file path and name. */
     private static String  fileNamePathQuery1 = "./query1_frequent_routes.txt";
@@ -69,6 +65,8 @@ public class EDASingleThread {
 
     // initial table size is 1e5
     private static Map<Route, Route> routes = new LinkedHashMap<>(100000);
+
+    private static Map<Cell, Cell> cells = new LinkedHashMap<>(100000);
 
     // current top 10 sorted
     private static LinkedList<Route> top10Previous = new LinkedList<>();
@@ -120,15 +118,15 @@ public class EDASingleThread {
         }
 
         // processing through streams, where number of threads is the same as number of cores
-        taxiStream.getTrips().log("broadcaster")
+        taxiStream.getTrips()/*.log("broadcaster")*/
             .map(t -> {
                 // create a tuple of string trip and current time for computing delay
                 // As this is our entry point it is appropriate to start the time here,
                 // before any parsing is being done. This also in record with the Grand
                 // challenge recommendation
                 Tuple2<String, Long> tripTime = Tuple.of(t, System.currentTimeMillis());
-                LOGGER.log(Level.INFO, "Distributing for ticket = " +
-                        t + " from thread = " + Thread.currentThread());
+//                LOGGER.log(Level.INFO, "Distributing for ticket = " +
+//                        t + " from thread = " + Thread.currentThread());
                 return tripTime;
             })
             // parsing and validating trip structure
@@ -160,9 +158,15 @@ public class EDASingleThread {
                                         // check for all the routes if there are any events leaving the window.
                                         // This is done by comparing current trip drop off time minus 30 min
                                         // with the head of the drop off for each route
+                                        // TODO (Jernej Jerin): Events leaving the window. First check for all
+                                        // TODO (Jernej Jerin): routes that are NOT in top 10. Then check for
+                                        // TODO (Jernej Jerin): those that are in previous top 10.
                                         routes.forEach((k, r) -> {
-                                            while (r.getDropOffWindow().peek() != null && r.getDropOffWindow().peek() < dropOffTimestamp - 30 * 60 * 1000) {
+                                            while (r.getDropOffWindow().peek() != null && r.getDropOffWindow().peek() <
+                                                    dropOffTimestamp - 30 * 60 * 1000) {
+                                                // event leaving the window
                                                 r.getDropOffWindow().poll();
+
                                                 // update drop off size of the key. We can do that, as
                                                 // hash code for the key does not contain attribute drop off size!
                                                 r.setDropOffSize(r.getDropOffSize() - 1);
@@ -171,11 +175,11 @@ public class EDASingleThread {
                                             // if the drop off window is empty, then we can remove the element from
                                             // route map. This way we are only maintaining a map of routes
                                             // active in last 30 minutes
-                                            if (r.getDropOffWindow().peek() == null)
-                                                routes.remove(r);
+                                            if (r.getDropOffWindow().peek() != null)
+//                                                routes.remove(k);
                                             // try to add it to top 10 list. This way we get sorted top 10 with
                                             // time complexity n * log(10) + 10 * log(10) vs. n * log(n)
-                                            else
+//                                            else
                                                 top10.offer(r);
                                         });
 
@@ -205,12 +209,30 @@ public class EDASingleThread {
                                         top10Previous = top10SortedNew;
 
                                         return Tuple.of(changed, t.getPickupDatetime(), t.getDropOffDatetime(),
-                                                top10SortedNew, t.getTimestampReceived());
+                                                top10SortedNew, t.getTimestampReceived(), t);
                                     })
-                                    // TODO (Jernej Jerin): Add CPU intensive task for query 2: Profitable areas
-                                    //            .map(bt -> {
-                                    //                return bt;
-                                    //            })
+                                    // query 2: Profitable areas
+                                    .map(ct -> {
+                                        /// TODO (Jernej Jerin): Map a taxi (medallion - vehicle bound) to the
+                                        // TODO (Jernej Jerin): cell.
+                                        // a priority queue for top 10 cells. Orders by natural number.
+                                        BoundedPriorityQueue<Cell> top10 = new BoundedPriorityQueue<>(Comparator.<Cell>naturalOrder(), 10);
+
+                                        long dropOffTimestamp = ct.getT6().getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000;
+
+                                        // get value in map or default value which is current drop off cell
+                                        Cell cell = cells.getOrDefault(ct.getT6().getRoute().getEndCell(),
+                                                ct.getT6().getRoute().getEndCell());
+
+                                        // put the latest taxi with medallion
+                                        cell.getTaxis().add(new Taxi(dropOffTimestamp, ct.getT6().getMedallion()));
+
+                                        // put if the route was not in the hash
+                                        if (cell == ct.getT6().getRoute().getEndCell())
+                                            cells.put(cell, cell);
+
+                                        return ct;
+                                    })
                                     .consume(ct -> {
                                         // write to file stream if the top 10 queue was changed
                                         if (ct.getT1()) {

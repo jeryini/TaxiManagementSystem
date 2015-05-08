@@ -5,6 +5,11 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
 
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Set;
+
 /**
  * <p>
  * Represents a square of 500m X 500m in a grid. The cell
@@ -20,8 +25,9 @@ import reactor.fn.tuple.Tuple2;
  *
  * @author Jernej Jerin
  */
-public class Cell {
+public class Cell implements Comparable<Cell> {
     // 0.004491556° represents 500m
+    // TODO (Jernej Jerin): add setting for 250m
     private static final Tuple2<Double, Double> TOP_LEFT = Tuple.of(41.474937 + 0.004491556 / 2,
             -74.913585 - 0.005986 / 2);
     private static final Tuple2<Double, Double> BOTTOM_RIGHT = Tuple.of(TOP_LEFT.getT1() - 300 * 0.004491556,
@@ -29,15 +35,21 @@ public class Cell {
 
     private int east;
     private int south;
+    private double profit;
+    private long lastUpdated;
+
+    private Set<Taxi> taxis;
 
     public Cell(double latitude, double longitude) {
         this.east = (int)((TOP_LEFT.getT1() - latitude) / 0.004491556);
         this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
+        this.taxis = new LinkedHashSet<>(100);
     }
 
     public Cell(int east, int south) {
         this.east = east;
         this.south = south;
+        this.taxis = new LinkedHashSet<>(100);
     }
 
     public int getEast() {
@@ -54,6 +66,30 @@ public class Cell {
 
     public void setSouth(int south) {
         this.south = south;
+    }
+
+    public double getProfit() {
+        return profit;
+    }
+
+    public void setProfit(double profit) {
+        this.profit = profit;
+    }
+
+    public long getLastUpdated() {
+        return lastUpdated;
+    }
+
+    public void setLastUpdated(long lastUpdated) {
+        this.lastUpdated = lastUpdated;
+    }
+
+    public Set<Taxi> getTaxis() {
+        return taxis;
+    }
+
+    public void setTaxis(Set<Taxi> taxis) {
+        this.taxis = taxis;
     }
 
     /**
@@ -100,5 +136,35 @@ public class Cell {
                 .append(this.south, cell.south)
                 .append(this.east, cell.east)
                 .isEquals();
+    }
+
+    public double toLatitude() {
+        return  TOP_LEFT.getT1() - this.east * 0.004491556;
+    }
+
+    public double toLongitude() {
+        return this.south * 0.005986 + TOP_LEFT.getT2();
+    }
+
+    @Override
+    public int compareTo(Cell cell) {
+        /* Question 7: How should we order elements in a list that have the same value for the ordering criterion?
+            Answer: You should always put the freshest information first. E.g. if route A and B have the same
+            frequency, put the route with the freshest input information fist (i.e. the one which includes
+            the freshest event).*/
+        if (this.profit < cell.profit)
+            return -1;
+        else if (this.profit > cell.profit)
+            return 1;
+        else {
+            // if contains drop off timestamps, order by last timestamp in drop off
+            // the highest timestamp has preceding
+            if (this.lastUpdated < cell.lastUpdated)
+                return -1;
+            else if (this.lastUpdated > cell.lastUpdated)
+                return 1;
+            else
+                return 0;
+        }
     }
 }
