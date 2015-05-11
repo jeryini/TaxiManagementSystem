@@ -1,14 +1,12 @@
 package com.jernejerin.traffic.entities;
 
+import com.jernejerin.traffic.helper.MedianOfIntegerStream;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
 
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * <p>
@@ -35,21 +33,26 @@ public class Cell implements Comparable<Cell> {
 
     private int east;
     private int south;
-    private double profit;
+    private double profitability;
+    private MedianOfIntegerStream medianProfit;
+    private Deque<Tuple2<Integer, Long>> tripProfitTime;
     private long lastUpdated;
-
     private Set<Taxi> taxis;
 
     public Cell(double latitude, double longitude) {
         this.east = (int)((TOP_LEFT.getT1() - latitude) / 0.004491556);
         this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
         this.taxis = new LinkedHashSet<>(100);
+        this.tripProfitTime = new ArrayDeque<>();
+        this.medianProfit = new MedianOfIntegerStream();
     }
 
     public Cell(int east, int south) {
         this.east = east;
         this.south = south;
         this.taxis = new LinkedHashSet<>(100);
+        this.tripProfitTime = new ArrayDeque<>();
+        this.medianProfit = new MedianOfIntegerStream();
     }
 
     public int getEast() {
@@ -68,12 +71,28 @@ public class Cell implements Comparable<Cell> {
         this.south = south;
     }
 
-    public double getProfit() {
-        return profit;
+    public double getProfitability() {
+        return profitability;
     }
 
-    public void setProfit(double profit) {
-        this.profit = profit;
+    public void setProfitability(double profitability) {
+        this.profitability = profitability;
+    }
+
+    public MedianOfIntegerStream getMedianProfit() {
+        return medianProfit;
+    }
+
+    public void setMedianProfit(MedianOfIntegerStream medianProfit) {
+        this.medianProfit = medianProfit;
+    }
+
+    public Deque<Tuple2<Integer, Long>> getTripProfitTime() {
+        return tripProfitTime;
+    }
+
+    public void setTripProfitTime(Deque<Tuple2<Integer, Long>> tripProfitTime) {
+        this.tripProfitTime = tripProfitTime;
     }
 
     public long getLastUpdated() {
@@ -114,11 +133,6 @@ public class Cell implements Comparable<Cell> {
                 .append(this.south)
                 .append(this.east)
                 .toHashCode();
-        // TODO (Jernej Jerin): Evaluate using the solution without using HashCodeBuilder
-//        int hash = 17;
-//        hash = ((hash + this.east) << 5) - (hash + this.east);
-//        hash = ((hash + this.south) << 5) - (hash + this.south);
-//        return hash;
     }
 
     @Override
@@ -152,9 +166,9 @@ public class Cell implements Comparable<Cell> {
             Answer: You should always put the freshest information first. E.g. if route A and B have the same
             frequency, put the route with the freshest input information fist (i.e. the one which includes
             the freshest event).*/
-        if (this.profit < cell.profit)
+        if (this.profitability < cell.profitability)
             return -1;
-        else if (this.profit > cell.profit)
+        else if (this.profitability > cell.profitability)
             return 1;
         else {
             // if contains drop off timestamps, order by last timestamp in drop off

@@ -38,6 +38,9 @@ public class MedianOfIntegerStream {
     }
 
     public Double getMedian() {
+        // if empty return 0
+        if (numOfElements == 0)
+            return new Double(0);
         if (numOfElements%2 != 0)
             return new Double(maxHeap.peek());
         else
