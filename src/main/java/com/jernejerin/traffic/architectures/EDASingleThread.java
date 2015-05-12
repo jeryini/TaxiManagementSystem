@@ -78,9 +78,9 @@ public class EDASingleThread {
 
         // output file
         /* The default output file path and name. */
-        String fileNamePathQuery1 = "./query1_frequent_routes.txt";
+        String fileNamePathQuery1 = "./EDA_single_thread_query1_frequent_routes.txt";
         fileQuery1 = new File(fileNamePathQuery1);
-        String fileNamePathQuery2 = "./query2_profitable_cells.txt";
+        String fileNamePathQuery2 = "./EDA_single_thread_query2_profitable_cells.txt";
         fileQuery2 = new File(fileNamePathQuery2);
 
         // environment initialization
@@ -160,6 +160,9 @@ public class EDASingleThread {
                                         // check for all the routes if there are any events leaving the window.
                                         // This is done by comparing current trip drop off time minus 30 min
                                         // with the head of the drop off for each route
+                                        // TODO (Jernej Jerin): Events leaving the window. First check for all
+                                        // TODO (Jernej Jerin): routes that are NOT in top 10. Then check for
+                                        // TODO (Jernej Jerin): those that are in previous top 10.
                                         routes.forEach((k, r) -> {
                                             while (r.getDropOffWindow().peek() != null && r.getDropOffWindow().peek() <
                                                     dropOffTimestamp - 30 * 60 * 1000) {
@@ -177,8 +180,8 @@ public class EDASingleThread {
                                             // active in last 30 minutes
                                             if (r.getDropOffWindow().peek() != null)
 //                                                routes.remove(k);
-                                            // try to add it to top 10 list. This way we get sorted top 10 with
-                                            // time complexity n * log(10) + 10 * log(10) vs. n * log(n)
+                                                // try to add it to top 10 list. This way we get sorted top 10 with
+                                                // time complexity n * log(10) + 10 * log(10) vs. n * log(n)
 //                                            else
                                                 top10.offer(r);
                                         });
