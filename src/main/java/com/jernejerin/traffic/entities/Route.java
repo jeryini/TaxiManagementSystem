@@ -3,6 +3,7 @@ package com.jernejerin.traffic.entities;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,14 +25,20 @@ public class Route implements Comparable<Route> {
     private int dropOffSize;
     private Cell startCell;
     private Cell endCell;
+    private long dropOff;
+    private LocalDateTime pickupDatetime; // time when the passenger(s) were picked up
+    private LocalDateTime dropOffDatetime; // time when the passenger(s) were dropped off
 
-    public Route(Cell startCell, Cell endCell, long lastUpdated) {
+    public Route(Cell startCell, Cell endCell, long lastUpdated, LocalDateTime pickupDatetime,
+                 LocalDateTime dropOffDatetime) {
         this.lastUpdated = lastUpdated;
         this.startCell = startCell;
         this.endCell = endCell;
         this.dropOffWindow = new ArrayDeque<>();
         this.pickUpWindow = new ArrayDeque<>();
         this.dropOffSize = 0;
+        this.pickupDatetime = pickupDatetime;
+        this.dropOffDatetime = dropOffDatetime;
     }
 
     public long getLastUpdated() {
@@ -82,7 +89,29 @@ public class Route implements Comparable<Route> {
         return this.dropOffSize;
     }
 
+    public long getDropOff() {
+        return dropOff;
+    }
 
+    public void setDropOff(long dropOff) {
+        this.dropOff = dropOff;
+    }
+
+    public LocalDateTime getPickupDatetime() {
+        return pickupDatetime;
+    }
+
+    public void setPickupDatetime(LocalDateTime pickupDatetime) {
+        this.pickupDatetime = pickupDatetime;
+    }
+
+    public LocalDateTime getDropOffDatetime() {
+        return dropOffDatetime;
+    }
+
+    public void setDropOffDatetime(LocalDateTime dropOffDatetime) {
+        this.dropOffDatetime = dropOffDatetime;
+    }
 
     @Override
     /**
