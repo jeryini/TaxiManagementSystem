@@ -3,14 +3,12 @@ package com.jernejerin.traffic.architectures;
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.Route;
-import com.jernejerin.traffic.entities.Taxi;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import org.apache.commons.cli.*;
 import reactor.Environment;
 import reactor.fn.tuple.Tuple;
-import reactor.fn.tuple.Tuple2;
 import reactor.io.codec.StandardCodecs;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
@@ -20,7 +18,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -33,7 +30,7 @@ import java.util.stream.Collectors;
  *
  * @author Jernej Jerin
  */
-public class EDAExperiment {
+public class EDASingleThread2 {
     /** The default hostname of the TCP server. */
     private static String hostTCP = "localhost";
 
@@ -61,7 +58,7 @@ public class EDAExperiment {
     private static File fileQuery1;
     private static File fileQuery2;
 
-    private final static Logger LOGGER = Logger.getLogger(EDAExperiment.class.getName());
+    private final static Logger LOGGER = Logger.getLogger(EDASingleThread2.class.getName());
 
     // initial table size is 1e5
 //    private static Map<Route, Route> routes = new LinkedHashMap<>(100000);
@@ -82,9 +79,9 @@ public class EDAExperiment {
 
         // output file
         /* The default output file path and name. */
-        String fileNamePathQuery1 = "./EDA_single_thread_query1_frequent_routes.txt";
+        String fileNamePathQuery1 = "./EDA_experimental_query1_frequent_routes.txt";
         fileQuery1 = new File(fileNamePathQuery1);
-        String fileNamePathQuery2 = "./EDA_single_thread_query2_profitable_cells.txt";
+        String fileNamePathQuery2 = "./EDA_experimental_query2_profitable_cells.txt";
         fileQuery2 = new File(fileNamePathQuery2);
 
         // environment initialization
@@ -159,18 +156,24 @@ public class EDAExperiment {
                                         while (routes.peek() != null && routes.peek().getDropOffDatetime().isBefore(
                                                 t.getDropOffDatetime().minusMinutes(30))) {
                                             Route route = routes.poll();
-                                            List<Route> bestRoutes = bestRoutes();
-                                            writeTop10Change(bestRoutes, route.getPickupDatetime().plusMinutes(30),
-                                                    route.getDropOffDatetime().plusMinutes(30),
-                                                    t.getTimestampReceived());
+
+                                            // recompute top10 only if the polled route is in the current top 10
+                                            if (top10PreviousQuery1.contains(route)) {
+                                                List<Route> bestRoutes = bestRoutes();
+
+                                                // if there is change in top 10, write it
+                                                writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
+                                                        route.getDropOffDatetime().plusMinutes(30),
+                                                        t.getTimestampReceived());
+                                            }
                                         }
 
                                         routes.add(t.getRoute());
                                         List<Route> bestRoutes = bestRoutes();
-                                        return Tuple.of(bestRoutes, t.getDropOffDatetime(), t.getPickupDatetime(),
+                                        return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
                                                 t.getTimestampReceived());
                                     })
-                                    .consume(ct -> writeTop10Change(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4()));
+                                    .consume(ct -> writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4()));
                             } else {
                                 routeValidStream.consume(trip ->
                                                 LOGGER.log(Level.WARNING, "Route is not valid for trip!")
@@ -190,23 +193,47 @@ public class EDAExperiment {
         Thread.sleep(Long.MAX_VALUE);
     }
 
+    /**
+     * Computes top 10 best routes sorted by frequency and last freshest event.
+     *
+     * @return a list of 10 best routes
+     */
     private static List<Route> bestRoutes() {
         // a priority queue for top 10 routes. Orders by natural number.
         BoundedPriorityQueue<Route> top10 = new BoundedPriorityQueue<>(Comparator.<Route>naturalOrder(), 10);
-        Map<Route, Long> routesCounted = routes.stream()
-                .collect(Collectors.groupingBy(gr -> gr, Collectors.counting()));
+
+        Map<Route, Integer> routesCounted = routes.stream()
+                // group by the same routes
+                .collect(Collectors.groupingBy(r -> r))
+                // we get a list of routes
+                .values().stream()
+                .collect(Collectors.toMap(
+                        // select for key the route, which was updated last. For the value set the list size.
+                        lst -> lst.stream().max(Comparator.comparing(Route::getLastUpdated)).get(),
+                        List::size
+                ));
         routesCounted.forEach((r, c) -> {
             r.setDropOffSize(c.intValue());
             top10.offer(r);
         });
 
+
         List<Route> top10SortedNew = new LinkedList<>(top10);
+        // sort routes
         top10SortedNew.sort(Comparator.<Route>reverseOrder());
 
         return  top10SortedNew;
     }
 
-    private static void writeTop10Change(List<Route> top10, LocalDateTime pickupDateTime,
+    /**
+     * Outputs a log to a file when top 10 routes is changed.
+     *
+     * @param top10 the new top 10 routes
+     * @param pickupDateTime the pickup date time of the event, that changed the top 10 routes
+     * @param dropOffDateTime the drop off date time of the event that change the top 10 routes
+     * @param delay the delay of between reading the event and writing the event
+     */
+    private static void writeTop10ChangeQuery1(List<Route> top10, LocalDateTime pickupDateTime,
                                          LocalDateTime dropOffDateTime, Long delay) {
         // write to file stream for query 1 if the top 10 queue was changed
         if (!top10.equals(top10PreviousQuery1)) {
