@@ -11,11 +11,9 @@ import java.io.UnsupportedEncodingException;
 import java.util.logging.Logger;
 
 /**
- * <p>
  * A taxi stream class for reading data and broadcasting it to the
  * different architectures. It can be used for streaming from TCP client
  * to TCP server or from local.
- * </p>
  *  
  * @author Jernej Jerin
  */
@@ -57,6 +55,7 @@ public class TaxiStream {
 
         String[] row;
 
+        // TODO (Jernej Jerin): Check for using the File.stream implementation
         // read line by line
         while ((row = parser.parseNext()) != null) {
             // create a string from array separated by comma
@@ -66,7 +65,7 @@ public class TaxiStream {
             this.trips.onNext(trip);
 
             // need to sleep because it is to fast :)
-            Thread.sleep(10);
+//            Thread.sleep(1);
         }
 
         // finished parsing all the data from the csv file
