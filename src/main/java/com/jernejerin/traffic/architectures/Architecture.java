@@ -26,7 +26,7 @@ import java.util.logging.Logger;
  *
  * @author Jernej Jerin
  */
-public class Architecture {
+public abstract class Architecture {
     protected String hostTCP;
     protected int portTCP;
     protected String hostDB;
@@ -96,11 +96,13 @@ public class Architecture {
      * @param top10 the new top 10 routes
      * @param pickupDateTime the pickup date time of the event, that changed the top 10 routes
      * @param dropOffDateTime the drop off date time of the event that change the top 10 routes
-     * @param delay the delay between reading the event and writing the event, i.e. processing time
-     *              of the event
+     * @param timeStart time in milliseconds when the event arrived
      */
     public void writeTop10ChangeQuery1(List<RouteCount> top10, LocalDateTime pickupDateTime,
-                                               LocalDateTime dropOffDateTime, long delay) {
+                                               LocalDateTime dropOffDateTime, long timeStart) {
+        // compute delay now as we do not want to take in the actual processing of the result
+        long delay = System.currentTimeMillis() - timeStart;
+
         // build content string for output
         String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
 
@@ -111,8 +113,8 @@ public class Architecture {
                     " (" + routeCount.count + "), ";
         }
 
-        // add a delay
-        content += System.currentTimeMillis() - delay + "\n";
+        // add a start time, end and a delay
+        content += delay + "\n";
 
         try (FileOutputStream fop = new FileOutputStream(this.fileQuery1, true)) {
             // write to file
@@ -123,6 +125,50 @@ public class Architecture {
             LOGGER.log(Level.SEVERE, ex.getMessage());
         }
     }
+
+    /**
+     * Outputs a log to a file when top 10 routes is changed.
+     *
+     * @param top10 the new top 10 routes
+     * @param pickupDateTime the pickup date time of the event, that changed the top 10 routes
+     * @param dropOffDateTime the drop off date time of the event that change the top 10 routes
+     * @param timeStart time in milliseconds when the event arrived
+     */
+    public void writeExecutionTime(List<RouteCount> top10, LocalDateTime pickupDateTime,
+                                       LocalDateTime dropOffDateTime, long timeStart) {
+        // compute delay now as we do not want to take in the actual processing of the result
+        long delay = System.currentTimeMillis() - timeStart;
+
+        // build content string for output
+        String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
+
+        // iterate over all the most frequent routes
+        for (RouteCount routeCount : top10) {
+            content += routeCount.route.getStartCell().getEast() + "." + routeCount.route.getStartCell().getSouth() +
+                    ", " + routeCount.route.getEndCell().getEast() + "." + routeCount.route.getEndCell().getSouth() +
+                    " (" + routeCount.count + "), ";
+        }
+
+        // add a start time, end and a delay
+        content += delay + "\n";
+
+        try (FileOutputStream fop = new FileOutputStream(this.fileQuery1, true)) {
+            // write to file
+            fop.write(content.getBytes());
+            fop.flush();
+            fop.close();
+        } catch (IOException ex) {
+            LOGGER.log(Level.SEVERE, ex.getMessage());
+        }
+    }
+
+
+
+    /**
+     * Method to run implemented architecture. The method should return the
+     * time to run the solution in milliseconds.
+     */
+    abstract long run() throws InterruptedException;
 
 }
 
@@ -158,10 +204,10 @@ class ArchitectureBuilder {
     protected String fileNameInput = "trips_example.csv";
 
     /** The output file name for query 1. */
-    protected String fileNameQuery1Output;
+    protected String fileNameQuery1Output = "query1.txt";
 
     /** The output file name for query 2. */
-    protected String fileNameQuery2Output;
+    protected String fileNameQuery2Output = "query2.txt";
 
     /** The default value if we are streaming from TCP client. */
     protected boolean streamingTCP = false;

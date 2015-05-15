@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.helper;
 
+import com.jernejerin.traffic.entities.Trip;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
 import reactor.Environment;
@@ -23,11 +24,20 @@ public class TaxiStream {
     // we use a hot stream as we have a unbounded stream of data incoming.
     private Broadcaster<String> trips;
 
+    // separate streams for each query
+    public Broadcaster<Trip> query1;
+    public Broadcaster<Trip> query2;
+
     public TaxiStream(String fileName) {
         this.fileName = fileName;
         this.trips = Broadcaster.create(Environment.get());
+        this.query1 = Broadcaster.create(Environment.get());
+        this.query2 = Broadcaster.create(Environment.get());
+
         // dispatch onto a new dispatcher that is suitable for streams
         this.trips.dispatchOn(Environment.cachedDispatcher());
+        this.query1.dispatchOn(Environment.cachedDispatcher());
+        this.query2.dispatchOn(Environment.cachedDispatcher());
     }
 
     public String getFileName() {

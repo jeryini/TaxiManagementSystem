@@ -18,7 +18,8 @@ jar {
 }
 
 ext {
-    reactorVersion = '2.0.1.BUILD-SNAPSHOT'
+    reactorVersion = '2.0.1.RELEASE'
+//    reactorVersion = '2.0.1.BUILD-SNAPSHOT'
 //    reactorVersion = '2.0.0.RELEASE'
 }
 
@@ -62,6 +63,10 @@ dependencies {
 
     // Netty
     compile "io.netty:netty-all:4.0.27.Final"
+
+    // JUnit
+    compile "junit:junit:4.12"
+
 }
 
 idea {

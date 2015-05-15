@@ -21,6 +21,8 @@ import java.util.stream.Collectors;
  * @author Jernej Jerin
  */
 public class EDASingleThread2 extends Architecture {
+    // current top 10 sorted
+    static List<RouteCount> top10Routes = new LinkedList<>();
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread2.class.getName());
 
     public EDASingleThread2(ArchitectureBuilder builder) {
@@ -44,12 +46,11 @@ public class EDASingleThread2 extends Architecture {
         eda2.run();
     }
 
-    public void run() throws InterruptedException {
+    public long run() throws InterruptedException {
+        long startTime, endTime;
         Queue<Route> routes = new ArrayDeque<>();
 
-        // current top 10 sorted
-        List<Route> top10Routes = new LinkedList<>();
-        LinkedList<Cell> top10PreviousQuery2 = new LinkedList<>();
+
 
         // consumer for TCP server
         this.serverTCP.start(ch -> {
@@ -85,54 +86,71 @@ public class EDASingleThread2 extends Architecture {
 //                            TripOperations.insertTrip(t);
 //                            return t;
 //                        })
-                        // group by if route for the trip is valid, as
-                        // we need route in follow up operations
-                        .groupBy(t -> t.getRoute() != null)
-                        .consume(routeValidStream -> {
-                            if (routeValidStream.key()) {
-                                routeValidStream
-                                    // query 1: Frequent routes
-                                    .map(t -> {
-                                        while (routes.peek() != null && routes.peek().getDropOffDatetime().isBefore(
-                                                t.getDropOffDatetime().minusMinutes(30))) {
-                                            Route route = routes.poll();
-
-                                            // recompute top10 only if the polled route is in the current top 10
-                                            if (top10Routes.contains(route)) {
-                                                List<RouteCount> bestRoutes = bestRoutes(routes);
-                                                if (!top10Routes.equals(bestRoutes)) {
-                                                    // if there is change in top 10, write it
-                                                    writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
-                                                            route.getDropOffDatetime().plusMinutes(30),
-                                                            t.getTimestampReceived());
-                                                }
-                                            }
-                                        }
-
-                                        // add to window
-                                        routes.add(t.getRoute());
-                                        List<RouteCount> bestRoutes = bestRoutes(routes);
-                                        return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
-                                                t.getTimestampReceived());
-                                    })
-                                    .consume(ct -> writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4()));
-                            } else {
-                                routeValidStream.consume(trip ->
-                                                LOGGER.log(Level.WARNING, "Route is not valid for trip!")
-                                );
-                            }
-                        });
+                            // group by if route for the trip is valid, as
+                            // we need route in follow up operations
+                            .groupBy(t -> t.getRoute() != null)
+                            .consume(routeValidStream -> {
+                                // TODO (Jernej Jerin): Emit here to two different streams for parallel processing.
+                                if (routeValidStream.key()) {
+                                    routeValidStream
+                                            .consume(t -> {
+                                                taxiStream.query1.onNext(t);
+                                                taxiStream.query2.onNext(t);
+                                            });
+                                } else {
+                                    routeValidStream.consume(//trip -> trip
+//                                                LOGGER.log(Level.WARNING, "Route is not valid for trip!")
+                                    );
+                                }
+                            });
                 } else {
-                        tripValidStream.consume(trip ->
-                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
-                        );
+                    tripValidStream.consume(//trip ->
+//                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
+                    );
                 }
             });
+
+        taxiStream.query1
+            // query 1: Frequent routes
+            .map(t -> {
+                while (routes.peek() != null && routes.peek().getDropOffDatetime().isBefore(
+                        t.getDropOffDatetime().minusMinutes(30))) {
+                    Route route = routes.poll();
+
+                    // recompute top10 only if the polled route is in the current top 10
+                    if (top10Routes.contains(route)) {
+                        List<RouteCount> bestRoutes = bestRoutes(routes);
+                        if (!top10Routes.equals(bestRoutes)) {
+                            top10Routes = bestRoutes;
+                            // if there is change in top 10, write it
+                            writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
+                                    route.getDropOffDatetime().plusMinutes(30),
+                                    t.getTimestampReceived());
+                        }
+                    }
+                }
+
+                // add to window
+                routes.add(t.getRoute());
+                List<RouteCount> bestRoutes = bestRoutes(routes);
+                return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
+                        t.getTimestampReceived());
+            })
+            .consume(ct -> {
+                if (!top10Routes.equals(ct.getT1())) {
+                    top10Routes = ct.getT1();
+                    writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4());
+                }
+
+            });
+        taxiStream.query2
+            .consume();
 
         // read the stream from file: for local testing
         taxiStream.readStream();
 
         Thread.sleep(Long.MAX_VALUE);
+        return 0;
     }
 
     /**

@@ -70,7 +70,7 @@ public class SEDA extends Architecture {
         seda.run();
     }
 
-    public void run() throws InterruptedException {
+    public long run() throws InterruptedException {
         // consumer for TCP server
         this.serverTCP.start(ch -> {
             ch.log("conn").consume(trip -> {
@@ -154,5 +154,7 @@ public class SEDA extends Architecture {
         // run the server forever
         // TODO(Jernej Jerin): Is there a better way to do this?
         Thread.sleep(Long.MAX_VALUE);
+
+        return 0;
     }
 }

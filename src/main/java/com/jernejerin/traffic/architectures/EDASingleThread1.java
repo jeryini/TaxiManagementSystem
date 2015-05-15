@@ -51,7 +51,7 @@ public class EDASingleThread1 extends Architecture {
         eda1.run();
     }
 
-    public void run() throws InterruptedException {
+    public long run() throws InterruptedException {
         // initial table size is 1e5
         final Map<Route, Route> routes = new LinkedHashMap<>(100000);
         final Map<Cell, Cell> cells = new LinkedHashMap<>(100000);
@@ -337,5 +337,6 @@ public class EDASingleThread1 extends Architecture {
         taxiStream.readStream();
 
         Thread.sleep(Long.MAX_VALUE);
+        return 0;
     }
 }

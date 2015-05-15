@@ -34,7 +34,7 @@ public class EDA extends Architecture {
         eda.run();
     }
 
-    public void run() throws InterruptedException {
-
+    public long run() throws InterruptedException {
+        return 0;
     }
 }
