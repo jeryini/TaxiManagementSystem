@@ -9,6 +9,7 @@ import reactor.rx.broadcast.Broadcaster;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -21,7 +22,7 @@ import java.util.logging.Logger;
 public class TaxiStream {
     private final static Logger LOGGER = Logger.getLogger(TaxiStream.class.getName());
     private String fileName;
-    // we use a hot stream as we have a unbounded stream of data incoming.
+    // we use a hot stream Observable as we have a unbounded stream of data incoming.
     private Broadcaster<String> trips;
 
     // separate streams for each query
@@ -30,6 +31,7 @@ public class TaxiStream {
 
     public TaxiStream(String fileName) {
         this.fileName = fileName;
+        // create Observable
         this.trips = Broadcaster.create(Environment.get());
         this.query1 = Broadcaster.create(Environment.get());
         this.query2 = Broadcaster.create(Environment.get());
@@ -77,6 +79,9 @@ public class TaxiStream {
             // need to sleep because it is to fast :)
 //            Thread.sleep(1);
         }
+        // close the channel as we are finished streaming data
+        // this sends a complete signal which we can in turn observe
+        this.trips.onComplete();
 
         // finished parsing all the data from the csv file
         parser.stopParsing();

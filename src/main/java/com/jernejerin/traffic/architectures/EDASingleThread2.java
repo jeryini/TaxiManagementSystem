@@ -6,9 +6,11 @@ import com.jernejerin.traffic.entities.Route;
 import com.jernejerin.traffic.entities.RouteCount;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
+import reactor.rx.Promise;
 import reactor.rx.Streams;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -23,6 +25,7 @@ import java.util.stream.Collectors;
 public class EDASingleThread2 extends Architecture {
     // current top 10 sorted
     static List<RouteCount> top10Routes = new LinkedList<>();
+    static long endTime;
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread2.class.getName());
 
     public EDASingleThread2(ArchitectureBuilder builder) {
@@ -34,7 +37,9 @@ public class EDASingleThread2 extends Architecture {
         LOGGER.log(Level.INFO, "Starting single threaded EDA 2 solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder();
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output(EDASingleThread2.class.getName() +
+                "query1.txt").fileNameQuery2Output(EDASingleThread2.class.getName() +
+                "query2.txt");
 
         // set host and port from command line options
         builder.setOptionsCmd(args);
@@ -47,23 +52,22 @@ public class EDASingleThread2 extends Architecture {
     }
 
     public long run() throws InterruptedException {
-        long startTime, endTime;
+        CountDownLatch completeSignal = new CountDownLatch(1);
+        long startTime = System.currentTimeMillis();
         Queue<Route> routes = new ArrayDeque<>();
 
-
-
         // consumer for TCP server
-        this.serverTCP.start(ch -> {
-            ch.log("conn").consume(trip -> {
-                LOGGER.log(Level.INFO, "TCP server receiving trip " +
-                        trip + " from thread = " + Thread.currentThread());
-                // dispatch event to a broadcaster pipeline
-                this.taxiStream.getTrips().onNext(trip);
-                LOGGER.log(Level.INFO, "TCP server send ticket to streaming pipeline for ticket = " +
-                        trip + " from thread = " + Thread.currentThread());
-            });
-            return Streams.never();
-        }).await();
+//        this.serverTCP.start(ch -> {
+//            ch.log("conn").consume(trip -> {
+//                LOGGER.log(Level.INFO, "TCP server receiving trip " +
+//                        trip + " from thread = " + Thread.currentThread());
+//                // dispatch event to a broadcaster pipeline
+//                this.taxiStream.getTrips().onNext(trip);
+//                LOGGER.log(Level.INFO, "TCP server send ticket to streaming pipeline for ticket = " +
+//                        trip + " from thread = " + Thread.currentThread());
+//            });
+//            return Streams.never();
+//        }).await();
 
         taxiStream.getTrips()
             .map(t -> {
@@ -73,9 +77,13 @@ public class EDASingleThread2 extends Architecture {
                 // challenge recommendation
                 return Tuple.of(t, System.currentTimeMillis());
             })
+            .observeComplete(v -> {
+                endTime = System.currentTimeMillis();
+                completeSignal.countDown();
+            })
             // parsing and validating trip structure
             .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
-                // group by trip validation
+                    // group by trip validation
             .groupBy(t -> t != null)
             .consume(tripValidStream -> {
                 // if trip is valid continue with operations on the trip
@@ -90,7 +98,6 @@ public class EDASingleThread2 extends Architecture {
                             // we need route in follow up operations
                             .groupBy(t -> t.getRoute() != null)
                             .consume(routeValidStream -> {
-                                // TODO (Jernej Jerin): Emit here to two different streams for parallel processing.
                                 if (routeValidStream.key()) {
                                     routeValidStream
                                             .consume(t -> {
@@ -141,7 +148,6 @@ public class EDASingleThread2 extends Architecture {
                     top10Routes = ct.getT1();
                     writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4());
                 }
-
             });
         taxiStream.query2
             .consume();
@@ -149,8 +155,9 @@ public class EDASingleThread2 extends Architecture {
         // read the stream from file: for local testing
         taxiStream.readStream();
 
-        Thread.sleep(Long.MAX_VALUE);
-        return 0;
+        // wait for onComplete event
+        completeSignal.await();
+        return endTime - startTime;
     }
 
     /**

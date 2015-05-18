@@ -317,7 +317,7 @@ class ArchitectureBuilder {
         // display help
         if (cmd.hasOption("help")) {
             HelpFormatter help = new HelpFormatter();
-            help.printHelp("java -jar " + this.getClass().getName(), options);
+            help.printHelp("java -jar FileName", options);
             System.exit(-1);
         }
 
