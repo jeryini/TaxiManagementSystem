@@ -77,7 +77,7 @@ public class TaxiStream {
             this.trips.onNext(trip);
 
             // need to sleep because it is to fast :)
-//            Thread.sleep(1);
+            Thread.sleep(1);
         }
         // close the channel as we are finished streaming data
         // this sends a complete signal which we can in turn observe

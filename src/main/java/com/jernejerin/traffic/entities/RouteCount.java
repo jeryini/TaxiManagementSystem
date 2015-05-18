@@ -21,7 +21,7 @@ public class RouteCount implements Comparable<RouteCount> {
 
     public static RouteCount combine(RouteCount rc1, RouteCount rc2) {
         Route recent;
-        if (rc1.route.getLastUpdated() > rc2.route.getLastUpdated()) {
+        if (rc1.route.getLastUpdated() - rc2.route.getLastUpdated() > 0) {
             recent = rc1.route;
         } else {
             recent = rc2.route;
@@ -68,9 +68,9 @@ public class RouteCount implements Comparable<RouteCount> {
         else {
             // if contains drop off timestamps, order by last timestamp in drop off
             // the highest timestamp has preceding
-            if (this.route.getLastUpdated() < routeCount.route.getLastUpdated())
+            if (this.route.getLastUpdated() - routeCount.route.getLastUpdated() < 0)
                 return -1;
-            else if (this.route.getLastUpdated() > route.getLastUpdated())
+            else if (this.route.getLastUpdated() - routeCount.route.getLastUpdated() > 0)
                 return 1;
             else
                 return 0;

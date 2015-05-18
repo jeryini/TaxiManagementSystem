@@ -178,7 +178,7 @@ public abstract class Architecture {
  *
  * @author Jernej Jerin
  */
-class ArchitectureBuilder {
+public class ArchitectureBuilder {
     /** The default hostname of the TCP server. */
     protected String hostTCP = "localhost";
 

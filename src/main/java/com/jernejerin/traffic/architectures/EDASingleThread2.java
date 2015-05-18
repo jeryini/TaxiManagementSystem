@@ -53,7 +53,7 @@ public class EDASingleThread2 extends Architecture {
 
     public long run() throws InterruptedException {
         CountDownLatch completeSignal = new CountDownLatch(1);
-        long startTime = System.currentTimeMillis();
+        long startTime = System.nanoTime();
         Queue<Route> routes = new ArrayDeque<>();
 
         // consumer for TCP server

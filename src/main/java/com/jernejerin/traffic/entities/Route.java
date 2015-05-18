@@ -154,9 +154,11 @@ public class Route implements Comparable<Route> {
         else {
                 // if contains drop off timestamps, order by last timestamp in drop off
                 // the highest timestamp has preceding
-            if (this.lastUpdated < route.lastUpdated)
+                // as we are comparing nanoseconds we should use {@code t1 - t0 < 0}, not {@code t1 < t0},
+                // because of the possibility of numerical overflow.
+            if (this.lastUpdated -  route.lastUpdated < 0)
                 return -1;
-            else if (this.lastUpdated > route.lastUpdated)
+            else if (this.lastUpdated - route.lastUpdated > 0)
                 return 1;
             else
                 return 0;
