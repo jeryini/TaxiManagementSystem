@@ -25,7 +25,7 @@ import java.util.stream.Collectors;
 public class EDASingleThread2 extends Architecture {
     // current top 10 sorted
     static List<RouteCount> top10Routes = new LinkedList<>();
-    static long endTime;
+
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread2.class.getName());
 
     public EDASingleThread2(ArchitectureBuilder builder) {
@@ -52,22 +52,10 @@ public class EDASingleThread2 extends Architecture {
     }
 
     public long run() throws InterruptedException {
+        top10Routes.clear();
         CountDownLatch completeSignal = new CountDownLatch(1);
         long startTime = System.nanoTime();
         Queue<Route> routes = new ArrayDeque<>();
-
-        // consumer for TCP server
-//        this.serverTCP.start(ch -> {
-//            ch.log("conn").consume(trip -> {
-//                LOGGER.log(Level.INFO, "TCP server receiving trip " +
-//                        trip + " from thread = " + Thread.currentThread());
-//                // dispatch event to a broadcaster pipeline
-//                this.taxiStream.getTrips().onNext(trip);
-//                LOGGER.log(Level.INFO, "TCP server send ticket to streaming pipeline for ticket = " +
-//                        trip + " from thread = " + Thread.currentThread());
-//            });
-//            return Streams.never();
-//        }).await();
 
         taxiStream.getTrips()
             .map(t -> {
@@ -77,10 +65,7 @@ public class EDASingleThread2 extends Architecture {
                 // challenge recommendation
                 return Tuple.of(t, System.currentTimeMillis());
             })
-            .observeComplete(v -> {
-                endTime = System.currentTimeMillis();
-                completeSignal.countDown();
-            })
+            .observeComplete(v -> completeSignal.countDown())
             // parsing and validating trip structure
             .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
                     // group by trip validation
@@ -157,7 +142,7 @@ public class EDASingleThread2 extends Architecture {
 
         // wait for onComplete event
         completeSignal.await();
-        return endTime - startTime;
+        return System.currentTimeMillis() - startTime;
     }
 
     /**
