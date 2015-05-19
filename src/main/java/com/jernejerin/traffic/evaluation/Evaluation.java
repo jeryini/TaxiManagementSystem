@@ -57,7 +57,7 @@ public class Evaluation {
 
         //  run once before taking measurements to avoid taking into account cache misses
         architecture.setFileNameQuery1Output("output/" + architecture.getClass().getSimpleName() + "_query1_cache.txt");
-        architecture.setFileNameQuery1Output("output/" + architecture.getClass().getSimpleName() + "_query2_cache.txt");
+        architecture.setFileNameQuery2Output("output/" + architecture.getClass().getSimpleName() + "_query2_cache.txt");
         architecture.run();
 
         for (int i = 0; i < numTimes; i++) {
@@ -66,19 +66,19 @@ public class Evaluation {
 
             long duration = architecture.run();
             double averageDelayQuery1 = getAverage(architecture.getFileQuery1().toPath());
-            double averageDelayQuery2 = getAverage(architecture.getFileQuery2().toPath());
+//            double averageDelayQuery2 = getAverage(architecture.getFileQuery2().toPath());
 
             // save the duration to median
             medianDuration.addNumberToStream(duration);
 
             // compute the average delay and save it to median
             medianDelayQuery1.addNumberToStream(averageDelayQuery1);
-            medianDelayQuery2.addNumberToStream(averageDelayQuery2);
+//            medianDelayQuery2.addNumberToStream(averageDelayQuery2);
 
-            results.add(i, Tuple.of(duration, averageDelayQuery1, averageDelayQuery2));
+            results.add(i, Tuple.of(duration, averageDelayQuery1, 0d));
         }
         return Tuple.of(medianDuration.getMedian(), Tuple.of(medianDelayQuery1.getMedian(),
-                medianDelayQuery2.getMedian()), results);
+                0d), results);
     }
 
     /**
