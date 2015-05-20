@@ -7,7 +7,8 @@ import java.util.Queue;
 
 /**
  * Computes median value of the elements currently in the collection.
- * Class also supports removing element.
+ * Class also supports removing element. The type must extend the abstract
+ * class Number.
  *
  * @param <T> type of the class must extend the Number class
  */
@@ -21,6 +22,11 @@ public class MedianOfStream<T extends Number & Comparable<? super T>> {
         minHeap = new PriorityQueue<>();
         maxHeap = new PriorityQueue<>(10, new MaxHeapComparator());
         numOfElements = 0;
+    }
+
+    public MedianOfStream(T n) {
+        this();
+        addNumberToStream(n);
     }
 
     public void addNumberToStream(T n) {
@@ -111,5 +117,6 @@ public class MedianOfStream<T extends Number & Comparable<? super T>> {
         streamMedian.removeNumberFromStream(8);
         streamMedian.removeNumberFromStream(3);
         System.out.println(streamMedian.getMedian()); // should be 5
+
     }
 }

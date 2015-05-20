@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.architectures;
 
+import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.RouteCount;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
@@ -140,6 +141,40 @@ public abstract class Architecture {
         content += delay + "\n";
 
         try (FileOutputStream fop = new FileOutputStream(this.fileQuery1, true)) {
+            // write to file
+            fop.write(content.getBytes());
+            fop.flush();
+            fop.close();
+        } catch (IOException ex) {
+            LOGGER.log(Level.SEVERE, ex.getMessage());
+        }
+    }
+
+    /**
+     * Outputs a log to a file when top 10 cells is changed.
+     *
+     * @param top10 the new top 10 cells
+     * @param pickupDateTime the pickup date time of the event, that changed the top 10 cells
+     * @param dropOffDateTime the drop off date time of the event that change the top 10 cells
+     * @param timeStart time in milliseconds when the event arrived
+     */
+    public void writeTop10ChangeQuery2(List<Cell> top10, LocalDateTime pickupDateTime,
+                                       LocalDateTime dropOffDateTime, long timeStart) {
+        // compute delay now as we do not want to take in the actual processing of the result
+        long delay = System.currentTimeMillis() - timeStart;
+
+        // build content string for output
+        String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
+
+        // iterate over all the most profitable cells
+        for (Cell cell : top10) {
+            content += cell.getEast() + "." + cell.getSouth() + " (" + cell.profitability + "),";
+        }
+
+        // add a start time, end and a delay
+        content += delay + "\n";
+
+        try (FileOutputStream fop = new FileOutputStream(this.fileQuery2, true)) {
             // write to file
             fop.write(content.getBytes());
             fop.flush();

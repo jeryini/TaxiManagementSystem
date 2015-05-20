@@ -2,17 +2,15 @@ package com.jernejerin.traffic.evaluation;
 
 import com.jernejerin.traffic.architectures.Architecture;
 import com.jernejerin.traffic.architectures.ArchitectureBuilder;
-import com.jernejerin.traffic.architectures.EDASingleThread2;
+import com.jernejerin.traffic.architectures.EDASingleThread3;
 import com.jernejerin.traffic.helper.MedianOfStream;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
 import reactor.fn.tuple.Tuple3;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -27,10 +25,10 @@ import java.util.List;
  */
 public class Evaluation {
     public static void main(String[] args) throws InterruptedException, IOException {
-
-        Architecture eda2 = new EDASingleThread2(new ArchitectureBuilder());
-        Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result = evaluate(eda2, 10);
-        printResult(result);
+        Architecture eda3 = new EDASingleThread3(new ArchitectureBuilder());
+        Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result2 = evaluate(eda3, 10);
+        System.out.println("EDA3:");
+        printResult(result2);
     }
 
     /**
@@ -102,13 +100,13 @@ public class Evaluation {
      * @param result the result to output
      */
     public static void printResult(Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result) {
-        System.out.format("%40Median duration of execution: ", result.getT1(), " ms");
-        System.out.format("%40Median of the average delay for query 1: ", result.getT2().getT1(), " ms");
-        System.out.format("%40Median of the average delay for query 2: ", result.getT2().getT2(), " ms");
+        System.out.format("%40s%n", "Median duration of execution: " + result.getT1() + " ms");
+        System.out.format("%40s%n", "Median of the average delay for query 1: " + result.getT2().getT1() + " ms");
+        System.out.format("%40s%n%n", "Median of the average delay for query 2: " + result.getT2().getT2() + " ms");
 
-        System.out.format("%30Duration of execution%30Average delay for query 1%30Average delay for query 2");
-        for (Tuple3<Long, Double, Double> runs : result.getT3()) {
-            System.out.format("%30d%30d%30d", runs.getT1(), runs.getT2(), runs.getT3());
+        System.out.format("%30s%30s%30s%n", "Duration of execution", "Average delay for query 1", "Average delay for query 2");
+        for (Tuple3<Long, Double, Double> run : result.getT3()) {
+            System.out.format("%30d%30f%30f%n", run.getT1(), run.getT2(), run.getT3());
         }
     }
 }

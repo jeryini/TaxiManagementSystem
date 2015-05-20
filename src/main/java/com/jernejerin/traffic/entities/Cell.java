@@ -1,6 +1,6 @@
 package com.jernejerin.traffic.entities;
 
-import com.jernejerin.traffic.helper.MedianOfIntegerStream;
+import com.jernejerin.traffic.helper.MedianOfStream;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 import reactor.fn.tuple.Tuple;
@@ -33,8 +33,8 @@ public class Cell implements Comparable<Cell> {
 
     private int east;
     private int south;
-    private double profitability;
-    private MedianOfIntegerStream medianProfit;
+    public double profitability;
+    private MedianOfStream<Integer> medianProfit;
     private Deque<Tuple2<Integer, Long>> tripProfitTime;
     private long lastUpdated;
     private Set<Taxi> taxis;
@@ -44,7 +44,7 @@ public class Cell implements Comparable<Cell> {
         this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
         this.taxis = new LinkedHashSet<>(100);
         this.tripProfitTime = new ArrayDeque<>();
-        this.medianProfit = new MedianOfIntegerStream();
+        this.medianProfit = new MedianOfStream<>();
     }
 
     public Cell(int east, int south) {
@@ -52,7 +52,7 @@ public class Cell implements Comparable<Cell> {
         this.south = south;
         this.taxis = new LinkedHashSet<>(100);
         this.tripProfitTime = new ArrayDeque<>();
-        this.medianProfit = new MedianOfIntegerStream();
+        this.medianProfit = new MedianOfStream<>();
     }
 
     public int getEast() {
@@ -79,11 +79,11 @@ public class Cell implements Comparable<Cell> {
         this.profitability = profitability;
     }
 
-    public MedianOfIntegerStream getMedianProfit() {
+    public MedianOfStream getMedianProfit() {
         return medianProfit;
     }
 
-    public void setMedianProfit(MedianOfIntegerStream medianProfit) {
+    public void setMedianProfit(MedianOfStream medianProfit) {
         this.medianProfit = medianProfit;
     }
 

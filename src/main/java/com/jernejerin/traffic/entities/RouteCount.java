@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.entities;
 
+import com.jernejerin.traffic.helper.MedianOfStream;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
@@ -9,14 +10,24 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
 public class RouteCount implements Comparable<RouteCount> {
     public final Route route;
     public long count;
+    public MedianOfStream<Double> medianProfit;
 
     public RouteCount(Route r, long c) {
         this.route = r;
         this.count = c;
     }
 
+    public RouteCount(Route r, MedianOfStream<Double> medianProfit) {
+        this.route = r;
+        this.medianProfit = medianProfit;
+    }
+
     public static RouteCount fromRoute(Route r) {
         return new RouteCount(r, 1L);
+    }
+
+    public static RouteCount fromRouteProfit(Route r) {
+        return new RouteCount(r, new MedianOfStream<>(r.profit));
     }
 
     public static RouteCount combine(RouteCount rc1, RouteCount rc2) {
@@ -27,6 +38,19 @@ public class RouteCount implements Comparable<RouteCount> {
             recent = rc2.route;
         }
         return new RouteCount(recent, rc1.count + rc2.count);
+    }
+
+    public static RouteCount combineByProfit(RouteCount rc1, RouteCount rc2) {
+        Route recent;
+        if (rc1.route.getLastUpdated() - rc2.route.getLastUpdated() > 0) {
+            recent = rc1.route;
+        } else {
+            recent = rc2.route;
+        }
+        // combine the median profits
+        rc2.medianProfit.maxHeap.forEach(rc1.medianProfit::addNumberToStream);
+        rc2.medianProfit.minHeap.forEach(rc1.medianProfit::addNumberToStream);
+        return new RouteCount(recent, rc1.medianProfit);
     }
 
     @Override

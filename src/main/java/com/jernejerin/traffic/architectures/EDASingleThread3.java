@@ -5,6 +5,7 @@ import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.Route;
 import com.jernejerin.traffic.entities.RouteCount;
 import com.jernejerin.traffic.entities.Taxi;
+import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
@@ -27,10 +28,6 @@ import java.util.stream.Collectors;
  * @author Jernej Jerin
  */
 public class EDASingleThread3 extends Architecture {
-    // current top 10 sorted
-    static List<RouteCount> top10Routes = new LinkedList<>();
-    static Map<Route, RouteCount> routesCount;
-    static long endTime;
     private final static Logger LOGGER = Logger.getLogger(EDASingleThread3.class.getName());
 
     public EDASingleThread3(ArchitectureBuilder builder) {
@@ -55,11 +52,15 @@ public class EDASingleThread3 extends Architecture {
     }
 
     public long run() throws InterruptedException {
-        CountDownLatch completeSignal = new CountDownLatch(1);
         long startTime = System.currentTimeMillis();
-        Queue<Route> routes = new ArrayDeque<>();
 
-        LinkedList<Cell> top10PreviousQuery2 = new LinkedList<>();
+        // create a taxi service
+        this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
+
+        // current top 10 sorted
+        final List<RouteCount> top10Routes = new LinkedList<>();
+        CountDownLatch completeSignal = new CountDownLatch(1);
+        Queue<Route> routes = new ArrayDeque<>();
 
 
         // consumer for TCP server
@@ -83,10 +84,7 @@ public class EDASingleThread3 extends Architecture {
                     // challenge recommendation
                     return Tuple.of(t, System.currentTimeMillis());
                 })
-                .observeComplete(v -> {
-                    endTime = System.currentTimeMillis();
-                    completeSignal.countDown();
-                })
+                .observeComplete(v -> completeSignal.countDown())
                         // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
                         // group by trip validation
@@ -111,14 +109,14 @@ public class EDASingleThread3 extends Architecture {
                                                     taxiStream.query2.onNext(t);
                                                 });
                                     } else {
-                                        routeValidStream.consume(trip ->
-                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
+                                        routeValidStream.consume(//trip ->
+//                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
                                         );
                                     }
                                 });
                     } else {
-                        tripValidStream.consume(trip ->
-                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
+                        tripValidStream.consume(//trip ->
+//                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
                         );
                     }
                 });
@@ -138,7 +136,8 @@ public class EDASingleThread3 extends Architecture {
                     if (top10Routes.contains(route)) {
                         List<RouteCount> bestRoutes = bestRoutes(routes);
                         if (!top10Routes.equals(bestRoutes)) {
-                            top10Routes = bestRoutes;
+                            top10Routes.clear();
+                            top10Routes.addAll(bestRoutes);
                             // if there is change in top 10, write it
                             writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
                                     route.getDropOffDatetime().plusMinutes(30),
@@ -167,7 +166,8 @@ public class EDASingleThread3 extends Architecture {
             })
             .consume(ct -> {
                 if (!top10Routes.equals(ct.getT1())) {
-                    top10Routes = ct.getT1();
+                    top10Routes.clear();
+                    top10Routes.addAll(ct.getT1());
                     writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4());
                 }
             });
@@ -180,15 +180,21 @@ public class EDASingleThread3 extends Architecture {
 
         // wait for onComplete event
         completeSignal.await();
-        return endTime - startTime;
+        return System.currentTimeMillis() - startTime;
     }
 
 
+    /**
+     * Computes top 10 best routes sorted by frequency and last freshest event.
+     *
+     * @param routes a window of routes in past 30 minutes
+     * @return a list of 10 best routes
+     */
     private static List<RouteCount> bestRoutes(Queue<Route> routes) {
         // a priority queue for top 10 routes. Orders by natural number.
         BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
 
-        routesCount = routes.stream()
+        Map<Route, RouteCount> routesCounted = routes.stream()
                 .collect(Collectors.groupingBy(route -> route,
                                 Collectors.collectingAndThen(
                                         Collectors.mapping(RouteCount::fromRoute, Collectors.reducing(RouteCount::combine)),
@@ -197,7 +203,7 @@ public class EDASingleThread3 extends Architecture {
                         )
                 );
 
-        routesCount.forEach((r, rc) -> {
+        routesCounted.forEach((r, rc) -> {
             top10.offer(rc);
         });
 
@@ -207,5 +213,38 @@ public class EDASingleThread3 extends Architecture {
         top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
 
         return top10SortedNew;
+    }
+
+    /**
+     * Computes top 10 best routes sorted by frequency and last freshest event. Compare to upper method
+     * this was proven to be of worse performance.
+     *
+     * @param routes a window of routes in past 30 minutes
+     * @return a list of 10 best routes
+     */
+    private List<RouteCount> bestRoutesPerformanceWorse(Queue<Route> routes) {
+        // a priority queue for top 10 routes. Orders by natural number.
+        BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
+
+        // we are performing only stateless intermediate operations
+        Map<Route, Integer> routesCounted = routes.stream()
+                // group by the same routes
+                .collect(Collectors.groupingBy(r -> r))
+                        // we get a list of routes
+                .values().stream()
+                .collect(Collectors.toMap(
+                        // select for key the route, which was updated last. For the value set the list size.
+                        lst -> lst.stream().max(Comparator.comparing(Route::getLastUpdated)).get(),
+                        List::size
+                ));
+        routesCounted.forEach((r, c) -> {
+            top10.offer(new RouteCount(r, c));
+        });
+
+        // sort routes
+        List<RouteCount> top10SortedNew = new LinkedList<>(top10);
+        top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
+
+        return  top10SortedNew;
     }
 }

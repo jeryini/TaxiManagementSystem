@@ -28,9 +28,11 @@ public class Route implements Comparable<Route> {
     private long dropOff;
     private LocalDateTime pickupDatetime; // time when the passenger(s) were picked up
     private LocalDateTime dropOffDatetime; // time when the passenger(s) were dropped off
+    public String medallion;
+    public double profit;
 
     public Route(Cell startCell, Cell endCell, long lastUpdated, LocalDateTime pickupDatetime,
-                 LocalDateTime dropOffDatetime) {
+                 LocalDateTime dropOffDatetime, String medallion) {
         this.lastUpdated = lastUpdated;
         this.startCell = startCell;
         this.endCell = endCell;
@@ -39,6 +41,7 @@ public class Route implements Comparable<Route> {
         this.dropOffSize = 0;
         this.pickupDatetime = pickupDatetime;
         this.dropOffDatetime = dropOffDatetime;
+        this.medallion = medallion;
     }
 
     public long getLastUpdated() {

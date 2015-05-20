@@ -67,7 +67,6 @@ public class TaxiStream {
 
         String[] row;
 
-        // TODO (Jernej Jerin): Check for using the File.stream implementation
         // read line by line
         while ((row = parser.parseNext()) != null) {
             // create a string from array separated by comma

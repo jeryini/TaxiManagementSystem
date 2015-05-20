@@ -31,7 +31,7 @@ public class ArchitectureBuilder {
     protected String schemaDB = "taxi_trip_management";
 
     /** The default input file name. */
-    protected String fileNameInput = "trips_example.csv";
+    protected String fileNameInput = "trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv";
 
     /** The output file name for query 1. */
     protected String fileNameQuery1Output = "query1.txt";

@@ -83,7 +83,7 @@ public class TripOperations {
                 Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
             trip.setRoute(new Route(new Cell(trip.getDropOffLatitude(), trip.getDropOffLongitude()),
                     new Cell(trip.getPickupLatitude(), trip.getPickupLongitude()), timestampReceived,
-                    trip.getPickupDatetime(), trip.getDropOffDatetime()));
+                    trip.getPickupDatetime(), trip.getDropOffDatetime(), trip.getMedallion()));
         }
 
 //        LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
