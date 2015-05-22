@@ -83,9 +83,9 @@ public class CellProfitability implements Comparable<CellProfitability> {
             Answer: You should always put the freshest information first. E.g. if route A and B have the same
             frequency, put the route with the freshest input information fist (i.e. the one which includes
             the freshest event).*/
-        if (this.medianProfit < cellProfitability.medianProfit)
+        if (this.profitability < cellProfitability.profitability)
             return -1;
-        else if (this.medianProfit > cellProfitability.medianProfit)
+        else if (this.profitability > cellProfitability.profitability)
             return 1;
         else {
             // if contains drop off timestamps, order by last timestamp in drop off

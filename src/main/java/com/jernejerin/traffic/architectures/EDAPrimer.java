@@ -142,7 +142,7 @@ public class EDAPrimer extends Architecture {
         // query 2: Frequent routes
         taxiStream.query2
                 .map(t -> {
-                    // events leaving window for empty taxis
+                    // events leaving window for empty taxis in the last 30 minutes
                     while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
                             t.getDropOffTimestamp() - 30 * 60 * 1000) {
                         Trip trip = tripEmptyTaxis.poll();
@@ -158,9 +158,9 @@ public class EDAPrimer extends Architecture {
                         }
 
                     }
-                    // events leaving the window for profit cells
+                    // events leaving the window for profit cells in the last 15 minutes
                     while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
-                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
                         Trip trip = tripProfits.poll();
 
                         List<CellProfitability> bestCells = bestCells(tripEmptyTaxis, tripProfits);

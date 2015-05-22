@@ -16,15 +16,15 @@ public class ArchitectureTest extends TestCase {
      */
     @Test
     public void testSerialRun() throws InterruptedException, IOException {
-        EDASingleThread3 eda3 = new EDASingleThread3(new ArchitectureBuilder().fileNameQuery1Output("output/" +
-                EDASingleThread3.class.getSimpleName() + "_query1_1.txt"));
+        EDAPrimer eda3 = new EDAPrimer(new ArchitectureBuilder().fileNameQuery1Output("output/" +
+                EDAPrimer.class.getSimpleName() + "_query1_1.txt"));
         eda3.run();
 
-        eda3.setFileNameQuery1Output("output/" + EDASingleThread3.class.getSimpleName() + "_query1_2.txt");
+        eda3.setFileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1_2.txt");
         eda3.run();
 
-        BufferedReader eda2BuffReader1 = new BufferedReader(new FileReader("output/" + EDASingleThread3.class.getSimpleName() + "_query1_1.txt"));
-        BufferedReader eda2BuffReader2 = new BufferedReader(new FileReader("output/" + EDASingleThread3.class.getSimpleName() + "_query1_2.txt"));
+        BufferedReader eda2BuffReader1 = new BufferedReader(new FileReader("output/" + EDAPrimer.class.getSimpleName() + "_query1_1.txt"));
+        BufferedReader eda2BuffReader2 = new BufferedReader(new FileReader("output/" + EDAPrimer.class.getSimpleName() + "_query1_2.txt"));
 
         String expectedLine;
         while ((expectedLine = eda2BuffReader1.readLine()) != null) {
@@ -45,7 +45,7 @@ public class ArchitectureTest extends TestCase {
      */
     @Test
     public void testRun() throws Exception {
-        Architecture eda3 = new EDASingleThread3(new ArchitectureBuilder().fileNameQuery1Output("output/" + EDASingleThread3.class.getSimpleName() + "_query1.txt"));
+        Architecture eda3 = new EDAPrimer(new ArchitectureBuilder().fileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
         eda3.run();
 
         BufferedReader eda2BuffReader = new BufferedReader(new FileReader(eda3.fileNameQuery1Output));
