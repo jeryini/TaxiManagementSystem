@@ -5,52 +5,43 @@ import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
 /**
- * Created by Jernej on 14.5.2015.
+ * A value class that holds count of Routes and the logic for combining.
+ *
+ * <b>
+ *     Note: this class has a natural ordering that is inconsistent with equals.
+ *
+ * @author Jernej Jerin
  */
 public class RouteCount implements Comparable<RouteCount> {
-    public final Route route;
-    public long count;
-    public MedianOfStream<Double> medianProfit;
+    private final Route route;
+    private final int id;
+    private final long count;
 
-    public RouteCount(Route r, long c) {
-        this.route = r;
-        this.count = c;
+    public RouteCount(Route route, int id, long count) {
+        this.route = route;
+        this.id = id;
+        this.count = count;
     }
 
-    public RouteCount(Route r, MedianOfStream<Double> medianProfit) {
-        this.route = r;
-        this.medianProfit = medianProfit;
+    public Route getRoute() {
+        return route;
     }
 
-    public static RouteCount fromRoute(Route r) {
-        return new RouteCount(r, 1L);
+    public int getId() {
+        return id;
     }
 
-    public static RouteCount fromRouteProfit(Route r) {
-        return new RouteCount(r, new MedianOfStream<>(r.profit));
+    public long getCount() {
+        return count;
     }
 
-    public static RouteCount combine(RouteCount rc1, RouteCount rc2) {
-        Route recent;
-        if (rc1.route.getLastUpdated() - rc2.route.getLastUpdated() > 0) {
-            recent = rc1.route;
-        } else {
-            recent = rc2.route;
-        }
-        return new RouteCount(recent, rc1.count + rc2.count);
+    public static RouteCount fromTrip(Trip trip) {
+        return new RouteCount(trip.getRoute500(), trip.getId(), 1L);
     }
 
-    public static RouteCount combineByProfit(RouteCount rc1, RouteCount rc2) {
-        Route recent;
-        if (rc1.route.getLastUpdated() - rc2.route.getLastUpdated() > 0) {
-            recent = rc1.route;
-        } else {
-            recent = rc2.route;
-        }
-        // combine the median profits
-        rc2.medianProfit.maxHeap.forEach(rc1.medianProfit::addNumberToStream);
-        rc2.medianProfit.minHeap.forEach(rc1.medianProfit::addNumberToStream);
-        return new RouteCount(recent, rc1.medianProfit);
+    public static RouteCount combine(RouteCount routeCount1, RouteCount routeCount2) {
+        RouteCount recent = routeCount1.id > routeCount2.id ? routeCount1 : routeCount2;
+        return new RouteCount(recent.route, recent.id, routeCount1.count + routeCount2.count);
     }
 
     @Override
@@ -92,9 +83,9 @@ public class RouteCount implements Comparable<RouteCount> {
         else {
             // if contains drop off timestamps, order by last timestamp in drop off
             // the highest timestamp has preceding
-            if (this.route.getLastUpdated() - routeCount.route.getLastUpdated() < 0)
+            if (this.id < routeCount.id)
                 return -1;
-            else if (this.route.getLastUpdated() - routeCount.route.getLastUpdated() > 0)
+            else if (this.id > routeCount.id)
                 return 1;
             else
                 return 0;

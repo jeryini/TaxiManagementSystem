@@ -66,6 +66,7 @@ public class TaxiStream {
         parser.beginParsing(getReader(this.fileName));
 
         String[] row;
+        int id = 0;
 
         // read line by line
         while ((row = parser.parseNext()) != null) {

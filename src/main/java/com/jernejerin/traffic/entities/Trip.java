@@ -1,47 +1,54 @@
 package com.jernejerin.traffic.entities;
 
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
 /**
- * <p>
- * A taxi trip entity.
- * </p>
+ * A taxi trip entity. Stores the trip data, such as fare, location, identity etc.
  *
  * @author Jernej Jerin
  */
 public class Trip {
 
-    private int id;
-    private String medallion;  // an md5sum of the identifier of the taxi - vehicle bound
-    private String hackLicense; // an md5sum of the identifier for the taxi license
-    private LocalDateTime pickupDatetime; // time when the passenger(s) were picked up
-    private LocalDateTime dropOffDatetime; // time when the passenger(s) were dropped off
+    private int id;        // consecutive id of the Trip
+    private String medallion;  // an md5sum identifier of the taxi - vehicle bound
+    private String hackLicense; // an md5sum identifier of the taxi license
+    private LocalDateTime pickupDatetime; // time and date when the passenger(s) were picked up
+    private LocalDateTime dropOffDatetime; // time and date when the passenger(s) were dropped off
+    private long pickupTimestamp;   // pickup datetime represented as timestamp
+    private long dropOffTimestamp;  // pickup datetime represented as timestamp
     private int tripTime;   // duration of the trip in seconds
-    private double tripDistance;    // trip distance in miles
-    private double pickupLongitude; // longitude coordinate of the pickup location
-    private double pickupLatitude;  // latitude coordinate of the pickup location
-    private double dropOffLongitude;    // longitude coordinate of the drop-off location
-    private double dropOffLatitude; // latitude coordinate of the drop-off location
+    private float tripDistance;    // trip distance in miles
+    private float pickupLongitude; // longitude coordinate of the pickup location
+    private float pickupLatitude;  // latitude coordinate of the pickup location
+    private float dropOffLongitude;    // longitude coordinate of the drop-off location
+    private float dropOffLatitude; // latitude coordinate of the drop-off location
     private Payment paymentType;    // the payment method - credit card or cash
-    private double fareAmount;    // fare amount in dollars
-    private double surcharge;  // surcharge in dollars
-    private double mtaTax; // tax in dollars
-    private double tipAmount;  // tip in dollars
-    private double tollsAmount; // bridge and tunnel tolls in dollars
-    private double totalAmount; // total paid amount in dollars
+    private float fareAmount;    // fare amount in dollars
+    private float surcharge;  // surcharge in dollars
+    private float mtaTax; // tax in dollars
+    private float tipAmount;  // tip in dollars
+    private float tollsAmount; // bridge and tunnel tolls in dollars
+    private float totalAmount; // total paid amount in dollars
     private long timestampReceived; // timestamp in milliseconds when we received the event
     // event that triggered the output and the time when the output is produced
-    private Route route;    // route between start cell and end cell
+    private Route route500;    // route between start cell and end cell with 500m X 500m
+    private Route route250;    // route between start cell and end cell with 250m X 250m
 
     public Trip() {}
 
-    public Trip(int id, String medallion, String hackLicense, LocalDateTime pickupDatetime, LocalDateTime dropOffDatetime, int tripTime, double tripDistance, double pickupLongitude, double pickupLatitude, double dropOffLongitude, double dropOffLatitude, Payment paymentType, double fareAmount, double surcharge, double mtaTax, double tipAmount, double tollsAmount, double totalAmount) {
+    public Trip(int id, String medallion, String hackLicense, LocalDateTime pickupDatetime,
+                LocalDateTime dropOffDatetime, long pickupTimestamp, long dropOffTimestamp,
+                int tripTime, float tripDistance, float pickupLongitude, float pickupLatitude,
+                float dropOffLongitude, float dropOffLatitude, Payment paymentType, float fareAmount,
+                float surcharge, float mtaTax, float tipAmount, float tollsAmount, float totalAmount,
+                long timestampReceived, Route route500, Route route250) {
         this.id = id;
         this.medallion = medallion;
         this.hackLicense = hackLicense;
         this.pickupDatetime = pickupDatetime;
         this.dropOffDatetime = dropOffDatetime;
+        this.pickupTimestamp = pickupTimestamp;
+        this.dropOffTimestamp = dropOffTimestamp;
         this.tripTime = tripTime;
         this.tripDistance = tripDistance;
         this.pickupLongitude = pickupLongitude;
@@ -55,6 +62,9 @@ public class Trip {
         this.tipAmount = tipAmount;
         this.tollsAmount = tollsAmount;
         this.totalAmount = totalAmount;
+        this.timestampReceived = timestampReceived;
+        this.route500 = route500;
+        this.route250 = route250;
     }
 
     public int getId() {
@@ -97,6 +107,22 @@ public class Trip {
         this.dropOffDatetime = dropOffDatetime;
     }
 
+    public long getPickupTimestamp() {
+        return pickupTimestamp;
+    }
+
+    public void setPickupTimestamp(long pickupTimestamp) {
+        this.pickupTimestamp = pickupTimestamp;
+    }
+
+    public long getDropOffTimestamp() {
+        return dropOffTimestamp;
+    }
+
+    public void setDropOffTimestamp(long dropOffTimestamp) {
+        this.dropOffTimestamp = dropOffTimestamp;
+    }
+
     public int getTripTime() {
         return tripTime;
     }
@@ -105,43 +131,43 @@ public class Trip {
         this.tripTime = tripTime;
     }
 
-    public double getTripDistance() {
+    public float getTripDistance() {
         return tripDistance;
     }
 
-    public void setTripDistance(double tripDistance) {
+    public void setTripDistance(float tripDistance) {
         this.tripDistance = tripDistance;
     }
 
-    public double getPickupLongitude() {
+    public float getPickupLongitude() {
         return pickupLongitude;
     }
 
-    public void setPickupLongitude(double pickupLongitude) {
+    public void setPickupLongitude(float pickupLongitude) {
         this.pickupLongitude = pickupLongitude;
     }
 
-    public double getPickupLatitude() {
+    public float getPickupLatitude() {
         return pickupLatitude;
     }
 
-    public void setPickupLatitude(double pickupLatitude) {
+    public void setPickupLatitude(float pickupLatitude) {
         this.pickupLatitude = pickupLatitude;
     }
 
-    public double getDropOffLongitude() {
+    public float getDropOffLongitude() {
         return dropOffLongitude;
     }
 
-    public void setDropOffLongitude(double dropOffLongitude) {
+    public void setDropOffLongitude(float dropOffLongitude) {
         this.dropOffLongitude = dropOffLongitude;
     }
 
-    public double getDropOffLatitude() {
+    public float getDropOffLatitude() {
         return dropOffLatitude;
     }
 
-    public void setDropOffLatitude(double dropOffLatitude) {
+    public void setDropOffLatitude(float dropOffLatitude) {
         this.dropOffLatitude = dropOffLatitude;
     }
 
@@ -153,67 +179,75 @@ public class Trip {
         this.paymentType = paymentType;
     }
 
-    public double getFareAmount() {
+    public float getFareAmount() {
         return fareAmount;
     }
 
-    public void setFareAmount(double fareAmount) {
+    public void setFareAmount(float fareAmount) {
         this.fareAmount = fareAmount;
     }
 
-    public double getSurcharge() {
+    public float getSurcharge() {
         return surcharge;
     }
 
-    public void setSurcharge(double surcharge) {
+    public void setSurcharge(float surcharge) {
         this.surcharge = surcharge;
     }
 
-    public double getMtaTax() {
+    public float getMtaTax() {
         return mtaTax;
     }
 
-    public void setMtaTax(double mtaTax) {
+    public void setMtaTax(float mtaTax) {
         this.mtaTax = mtaTax;
     }
 
-    public double getTipAmount() {
+    public float getTipAmount() {
         return tipAmount;
     }
 
-    public void setTipAmount(double tipAmount) {
+    public void setTipAmount(float tipAmount) {
         this.tipAmount = tipAmount;
     }
 
-    public double getTollsAmount() {
+    public float getTollsAmount() {
         return tollsAmount;
     }
 
-    public void setTollsAmount(double tollsAmount) {
+    public void setTollsAmount(float tollsAmount) {
         this.tollsAmount = tollsAmount;
     }
 
-    public double getTotalAmount() {
+    public float getTotalAmount() {
         return totalAmount;
     }
 
-    public void setTotalAmount(double totalAmount) {
+    public void setTotalAmount(float totalAmount) {
         this.totalAmount = totalAmount;
     }
 
     public long getTimestampReceived() {
-        return this.timestampReceived;
+        return timestampReceived;
     }
 
     public void setTimestampReceived(long timestampReceived) {
         this.timestampReceived = timestampReceived;
     }
 
-    public Route getRoute() {
-        return this.route;
+    public Route getRoute500() {
+        return route500;
     }
 
-    public void setRoute(Route route) {
-        this.route = route;
+    public void setRoute500(Route route500) {
+        this.route500 = route500;
+    }
+
+    public Route getRoute250() {
+        return route250;
+    }
+
+    public void setRoute250(Route route250) {
+        this.route250 = route250;
     }
 }

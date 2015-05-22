@@ -1,9 +1,6 @@
 package com.jernejerin.traffic.helper;
 
-import com.jernejerin.traffic.entities.Cell;
-import com.jernejerin.traffic.entities.Payment;
-import com.jernejerin.traffic.entities.Route;
-import com.jernejerin.traffic.entities.Trip;
+import com.jernejerin.traffic.entities.*;
 
 import org.apache.commons.lang3.math.NumberUtils;
 
@@ -24,7 +21,6 @@ import java.util.logging.Logger;
 /**
  * <p>
  * Helper class for trip operations.
- * </p>
  *
  * @author Jernej Jerin
  */
@@ -42,9 +38,10 @@ public class TripOperations {
      *
      * @param tripValues comma delimited string representing Trip to check
      * @param timestampReceived Timestamp when the event was received
+     * @param id id of the event received
      * @return a Trip with erroneous values set to MIN_VALUE, or null if whole trip was malformed
      */
-    public static Trip parseValidateTrip(String tripValues, long timestampReceived) {
+    public static Trip parseValidateTrip(String tripValues, long timestampReceived, int id) {
 //        LOGGER.log(Level.INFO, "Started parsing and validating trip = " +
 //                tripValues + " from thread = " + Thread.currentThread());
 
@@ -59,31 +56,34 @@ public class TripOperations {
             return null;
 
         // check for correct values and then set them
+        trip.setId(id);
         trip.setMedallion(tryParseMD5(tripSplit[0], null));
         trip.setHackLicense(tryParseMD5(tripSplit[1], null));
         trip.setPickupDatetime(tryParseDateTime(tripSplit[2], null));
         trip.setDropOffDatetime(tryParseDateTime(tripSplit[3], null));
+        trip.setDropOffTimestamp(trip.getDropOffDatetime() != null ? trip.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000 : 0);
         trip.setTripTime(NumberUtils.toInt(tripSplit[4], Integer.MIN_VALUE));
-        trip.setTripDistance(NumberUtils.toDouble(tripSplit[5], Integer.MIN_VALUE));
-        trip.setPickupLongitude(tryLongitude(tripSplit[6], Double.MIN_VALUE));
-        trip.setPickupLatitude(tryLatitude(tripSplit[7], Double.MIN_VALUE));
-        trip.setDropOffLongitude(tryLongitude(tripSplit[8], Double.MIN_VALUE));
-        trip.setDropOffLatitude(tryLatitude(tripSplit[9], Double.MIN_VALUE));
+        trip.setTripDistance(NumberUtils.toFloat(tripSplit[5], Integer.MIN_VALUE));
+        trip.setPickupLongitude(tryLongitude(tripSplit[6], Float.MIN_VALUE));
+        trip.setPickupLatitude(tryLatitude(tripSplit[7], Float.MIN_VALUE));
+        trip.setDropOffLongitude(tryLongitude(tripSplit[8], Float.MIN_VALUE));
+        trip.setDropOffLatitude(tryLatitude(tripSplit[9], Float.MIN_VALUE));
         trip.setPaymentType(tryPayment(tripSplit[10], null));
-        trip.setFareAmount(NumberUtils.toDouble(tripSplit[11], Double.MIN_VALUE));
-        trip.setSurcharge(NumberUtils.toDouble(tripSplit[12], Double.MIN_VALUE));
-        trip.setMtaTax(NumberUtils.toDouble(tripSplit[13], Double.MIN_VALUE));
-        trip.setTipAmount(NumberUtils.toDouble(tripSplit[14], Double.MIN_VALUE));
-        trip.setTollsAmount(NumberUtils.toDouble(tripSplit[15], Double.MIN_VALUE));
-        trip.setTotalAmount(NumberUtils.toDouble(tripSplit[16], Double.MIN_VALUE));
+        trip.setFareAmount(NumberUtils.toFloat(tripSplit[11], Float.MIN_VALUE));
+        trip.setSurcharge(NumberUtils.toFloat(tripSplit[12], Float.MIN_VALUE));
+        trip.setMtaTax(NumberUtils.toFloat(tripSplit[13], Float.MIN_VALUE));
+        trip.setTipAmount(NumberUtils.toFloat(tripSplit[14], Float.MIN_VALUE));
+        trip.setTollsAmount(NumberUtils.toFloat(tripSplit[15], Float.MIN_VALUE));
+        trip.setTotalAmount(NumberUtils.toFloat(tripSplit[16], Float.MIN_VALUE));
         trip.setTimestampReceived(timestampReceived);
 
         // does the coordinate for pickup location lie inside grid
         if (Cell.inGrid(trip.getPickupLatitude(), trip.getPickupLongitude()) &&
                 Cell.inGrid(trip.getDropOffLatitude(), trip.getDropOffLongitude())) {
-            trip.setRoute(new Route(new Cell(trip.getDropOffLatitude(), trip.getDropOffLongitude()),
-                    new Cell(trip.getPickupLatitude(), trip.getPickupLongitude()), timestampReceived,
-                    trip.getPickupDatetime(), trip.getDropOffDatetime(), trip.getMedallion()));
+            trip.setRoute250(new Route(new Cell250(trip.getPickupLatitude(), trip.getPickupLongitude()),
+                    new Cell250(trip.getDropOffLatitude(), trip.getDropOffLongitude())));
+            trip.setRoute500(new Route(new Cell500(trip.getPickupLatitude(), trip.getPickupLongitude()),
+                    new Cell500(trip.getDropOffLatitude(), trip.getDropOffLongitude())));
         }
 
 //        LOGGER.log(Level.INFO, "Finished parsing and validating trip = " +
@@ -193,10 +193,10 @@ public class TripOperations {
      * @param defaultValue the default value to return if parse fails
      * @return converted longitude
      */
-    public static double tryLongitude(String longitudeStr, double defaultValue) {
+    public static float tryLongitude(String longitudeStr, float defaultValue) {
         if (longitudeStr == null)
             return defaultValue;
-        double longitude = NumberUtils.toDouble(longitudeStr, defaultValue);
+        float longitude = NumberUtils.toFloat(longitudeStr, defaultValue);
         if (longitude > 180 || longitude < -180)
             return defaultValue;
         else
@@ -210,10 +210,10 @@ public class TripOperations {
      * @param defaultValue the default value to return if parse fails
      * @return converted latitude
      */
-    public static double tryLatitude(String latitudeStr, double defaultValue) {
+    public static float tryLatitude(String latitudeStr, float defaultValue) {
         if (latitudeStr == null)
             return defaultValue;
-        double latitude = NumberUtils.toDouble(latitudeStr, defaultValue);
+        float latitude = NumberUtils.toFloat(latitudeStr, defaultValue);
         if (latitude > 90 || latitude < -90)
             return defaultValue;
         else

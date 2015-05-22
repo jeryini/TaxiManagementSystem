@@ -10,7 +10,7 @@ import java.util.*;
 
 /**
  * <p>
- * Represents a square of 500m X 500m in a grid. The cell
+ * Represents a square in a grid. The cell
  * grid starts with cell 0.0, located at 41.474937, -74.913585
  * (in Barryville). The coordinate 41.474937, -74.913585 marks
  * the center of the first cell. Cell numbers increase towards
@@ -23,37 +23,27 @@ import java.util.*;
  *
  * @author Jernej Jerin
  */
-public class Cell implements Comparable<Cell> {
-    // 0.004491556° represents 500m
-    // TODO (Jernej Jerin): add setting for 250m
-    private static final Tuple2<Double, Double> TOP_LEFT = Tuple.of(41.474937 + 0.004491556 / 2,
-            -74.913585 - 0.005986 / 2);
-    private static final Tuple2<Double, Double> BOTTOM_RIGHT = Tuple.of(TOP_LEFT.getT1() - 300 * 0.004491556,
-            TOP_LEFT.getT2() + 300 * 0.005986);
+public abstract class Cell {
+    // 0.004491556° represents 500m change to south
+    protected static final float SOUTH_250 = 0.004491556f / 2f;
+    protected static final float SOUTH_500 = 0.004491556f;
 
-    private int east;
-    private int south;
-    public double profitability;
-    private MedianOfStream<Integer> medianProfit;
-    private Deque<Tuple2<Integer, Long>> tripProfitTime;
-    private long lastUpdated;
-    private Set<Taxi> taxis;
+    // 0.005986° represents 500m change to east
+    protected static final float EAST_250 = 0.005986f / 2f;
+    protected static final float EAST_500 = 0.005986f;
 
-    public Cell(double latitude, double longitude) {
-        this.east = (int)((TOP_LEFT.getT1() - latitude) / 0.004491556);
-        this.south = (int)((-TOP_LEFT.getT2() + longitude) / 0.005986);
-        this.taxis = new LinkedHashSet<>(100);
-        this.tripProfitTime = new ArrayDeque<>();
-        this.medianProfit = new MedianOfStream<>();
-    }
+    // center of the first cell (0.0)
+    private static final Tuple2<Float, Float> CENTER_CELL_1_1 = Tuple.of(41.474937f, -74.913585f);
 
-    public Cell(int east, int south) {
-        this.east = east;
-        this.south = south;
-        this.taxis = new LinkedHashSet<>(100);
-        this.tripProfitTime = new ArrayDeque<>();
-        this.medianProfit = new MedianOfStream<>();
-    }
+    protected static final Tuple2<Float, Float> TOP_LEFT =
+            Tuple.of(CENTER_CELL_1_1.getT1() + SOUTH_250, CENTER_CELL_1_1.getT2() - EAST_250);
+    protected static final Tuple2<Float, Float> BOTTOM_RIGHT =
+            Tuple.of(TOP_LEFT.getT1() - 300f * SOUTH_500, TOP_LEFT.getT2() + 300f * EAST_500);
+
+    protected int east;
+    protected int south;
+
+    public Cell() {}
 
     public int getEast() {
         return east;
@@ -71,46 +61,6 @@ public class Cell implements Comparable<Cell> {
         this.south = south;
     }
 
-    public double getProfitability() {
-        return profitability;
-    }
-
-    public void setProfitability(double profitability) {
-        this.profitability = profitability;
-    }
-
-    public MedianOfStream getMedianProfit() {
-        return medianProfit;
-    }
-
-    public void setMedianProfit(MedianOfStream medianProfit) {
-        this.medianProfit = medianProfit;
-    }
-
-    public Deque<Tuple2<Integer, Long>> getTripProfitTime() {
-        return tripProfitTime;
-    }
-
-    public void setTripProfitTime(Deque<Tuple2<Integer, Long>> tripProfitTime) {
-        this.tripProfitTime = tripProfitTime;
-    }
-
-    public long getLastUpdated() {
-        return lastUpdated;
-    }
-
-    public void setLastUpdated(long lastUpdated) {
-        this.lastUpdated = lastUpdated;
-    }
-
-    public Set<Taxi> getTaxis() {
-        return taxis;
-    }
-
-    public void setTaxis(Set<Taxi> taxis) {
-        this.taxis = taxis;
-    }
-
     /**
      * Checks if coordinates are inside defined grid. It checks by comparing
      * the coordinates to the top left vs the top right point.
@@ -119,7 +69,7 @@ public class Cell implements Comparable<Cell> {
      * @param longitude longitude of the coordinate
      * @return a boolean value if the coordinate lies inside grid
      */
-    public static boolean inGrid(double latitude, double longitude) {
+    public static boolean inGrid(float latitude, float longitude) {
         return latitude <= TOP_LEFT.getT1() && longitude >= TOP_LEFT.getT2() &&
                 latitude >= BOTTOM_RIGHT.getT1() && longitude <= BOTTOM_RIGHT.getT2();
     }
@@ -152,33 +102,12 @@ public class Cell implements Comparable<Cell> {
                 .isEquals();
     }
 
-    public double toLatitude() {
-        return  TOP_LEFT.getT1() - this.east * 0.004491556;
-    }
+    public abstract float toLatitude();
 
-    public double toLongitude() {
-        return this.south * 0.005986 + TOP_LEFT.getT2();
-    }
+    public abstract float toLongitude();
 
     @Override
-    public int compareTo(Cell cell) {
-        /* Question 7: How should we order elements in a list that have the same value for the ordering criterion?
-            Answer: You should always put the freshest information first. E.g. if route A and B have the same
-            frequency, put the route with the freshest input information fist (i.e. the one which includes
-            the freshest event).*/
-        if (this.profitability < cell.profitability)
-            return -1;
-        else if (this.profitability > cell.profitability)
-            return 1;
-        else {
-            // if contains drop off timestamps, order by last timestamp in drop off
-            // the highest timestamp has preceding
-            if (this.lastUpdated < cell.lastUpdated)
-                return -1;
-            else if (this.lastUpdated > cell.lastUpdated)
-                return 1;
-            else
-                return 0;
-        }
+    public String toString() {
+        return this.east + "." + this.south;
     }
 }

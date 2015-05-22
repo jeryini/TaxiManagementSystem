@@ -1,9 +1,7 @@
 package com.jernejerin.traffic.architectures;
 
 import com.aliasi.util.BoundedPriorityQueue;
-import com.jernejerin.traffic.entities.Cell;
-import com.jernejerin.traffic.entities.Route;
-import com.jernejerin.traffic.entities.RouteCount;
+import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
@@ -27,6 +25,7 @@ import java.util.stream.StreamSupport;
  */
 public class EDAPrimer extends Architecture {
     private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
+    private static int id = 0;
 
     public EDAPrimer(ArchitectureBuilder builder) {
         // call super constructor to initialize fields from builder
@@ -37,7 +36,9 @@ public class EDAPrimer extends Architecture {
         LOGGER.log(Level.INFO, "Starting single threaded EDA 3 solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder();
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +
+                EDAPrimer.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/" +
+                EDAPrimer.class.getSimpleName() + "_query2.txt");
 
         // set host and port from command line options
         builder.setOptionsCmd(args);
@@ -57,11 +58,14 @@ public class EDAPrimer extends Architecture {
 
         // current top 10 sorted
         final List<RouteCount> top10Routes = new LinkedList<>();
-        final List<Cell> top10Cells = new LinkedList<>();
+        final List<CellProfitability> top10Cells = new LinkedList<>();
+
+        // time windows
+        Queue<Trip> trips = new ArrayDeque<>();
+        ArrayDeque<Trip> tripProfits = new ArrayDeque<>();
+        ArrayDeque<Trip> tripEmptyTaxis = new ArrayDeque<>();
+
         CountDownLatch completeSignal = new CountDownLatch(1);
-        Queue<Route> routes = new ArrayDeque<>();
-        ArrayDeque<Route> profitCells = new ArrayDeque<>();
-        ArrayDeque<Route> emptyTaxiCells = new ArrayDeque<>();
 
 
         taxiStream.getTrips()
@@ -70,18 +74,18 @@ public class EDAPrimer extends Architecture {
                     // As this is our entry point it is appropriate to start the time here,
                     // before any parsing is being done. This also in record with the Grand
                     // challenge recommendation
-                    return Tuple.of(t, System.currentTimeMillis());
+                    return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
                 .observeComplete(v -> completeSignal.countDown())
                         // parsing and validating trip structure
-                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
+                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                         // group by trip validation
                 .groupBy(t -> t != null)
                 .consume(tripValidStream -> {
                     // if trip is valid continue with operations on the trip
                     if (tripValidStream.key()) {
                         tripValidStream
-                                .groupBy(t -> t.getRoute() != null)
+                                .groupBy(t -> t.getRoute250() != null)
                                 .consume(routeValidStream -> {
                                     if (routeValidStream.key()) {
                                         routeValidStream
@@ -104,32 +108,34 @@ public class EDAPrimer extends Architecture {
         // query 1: Frequent routes
         taxiStream.query1
                 .map(t -> {
-                    while (routes.peek() != null && routes.peek().getDropOffDatetime().isBefore(
-                            t.getDropOffDatetime().minusMinutes(30))) {
-                        Route route = routes.poll();
-                        List<RouteCount> bestRoutes = bestRoutes(routes);
+                    // trips leaving the window
+                    while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
+                            - 30 * 60 * 1000) {
+                        Trip trip = trips.poll();
+                        List<RouteCount> bestRoutes = bestRoutes(trips);
+
                         // if there is change in top 10, write it
                         if (!top10Routes.equals(bestRoutes)) {
                             top10Routes.clear();
                             top10Routes.addAll(bestRoutes);
-                            writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
-                                    route.getDropOffDatetime().plusMinutes(30),
-                                    t.getTimestampReceived());
+                            writeTop10ChangeQuery1(bestRoutes, trip.getPickupDatetime().plusMinutes(30),
+                                    trip.getDropOffDatetime().plusMinutes(30),
+                                    t.getTimestampReceived(), trip);
                         }
                     }
 
                     // add to window
-                    routes.add(t.getRoute());
+                    trips.add(t);
 
-                    List<RouteCount> bestRoutes = bestRoutes(routes);
+                    List<RouteCount> bestRoutes = bestRoutes(trips);
                     return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
-                            t.getTimestampReceived());
+                            t.getTimestampReceived(), t);
             })
             .consume(ct -> {
                 if (!top10Routes.equals(ct.getT1())) {
                     top10Routes.clear();
                     top10Routes.addAll(ct.getT1());
-                    writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4());
+                    writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
                 }
             });
 
@@ -137,44 +143,42 @@ public class EDAPrimer extends Architecture {
         taxiStream.query2
                 .map(t -> {
                     // events leaving window for empty taxis
-                    while (emptyTaxiCells.peek() != null && emptyTaxiCells.peek().getDropOffDatetime().isBefore(
-                            t.getDropOffDatetime().minusMinutes(30))) {
-                        Route route = emptyTaxiCells.poll();
+                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
+                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+                        Trip trip = tripEmptyTaxis.poll();
 
-                        List<Cell> bestCells = bestCells(emptyTaxiCells, profitCells);
+                        List<CellProfitability> bestCells = bestCells(tripEmptyTaxis, tripProfits);
                         // if there is change in top 10, write it
                         if (!top10Cells.equals(bestCells)) {
                             top10Cells.clear();
                             top10Cells.addAll(bestCells);
-                            writeTop10ChangeQuery2(bestCells, route.getPickupDatetime().plusMinutes(30),
-                                    route.getDropOffDatetime().plusMinutes(30),
+                            writeTop10ChangeQuery2(bestCells, trip.getPickupDatetime().plusMinutes(30),
+                                    trip.getDropOffDatetime().plusMinutes(30),
                                     t.getTimestampReceived());
                         }
 
                     }
                     // events leaving the window for profit cells
-                    while (profitCells.peek() != null && profitCells.peek().getDropOffDatetime().isBefore(
-                            t.getDropOffDatetime().minusMinutes(15))) {
-                        Route route = profitCells.poll();
+                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
+                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+                        Trip trip = tripProfits.poll();
 
-                        List<Cell> bestCells = bestCells(emptyTaxiCells, profitCells);
+                        List<CellProfitability> bestCells = bestCells(tripEmptyTaxis, tripProfits);
                         // if there is change in top 10, write it
                         if (!top10Cells.equals(bestCells)) {
                             top10Cells.clear();
                             top10Cells.addAll(bestCells);
-                            writeTop10ChangeQuery2(bestCells, route.getPickupDatetime().plusMinutes(30),
-                                    route.getDropOffDatetime().plusMinutes(30),
+                            writeTop10ChangeQuery2(bestCells, trip.getPickupDatetime().plusMinutes(30),
+                                    trip.getDropOffDatetime().plusMinutes(30),
                                     t.getTimestampReceived());
                         }
                     }
 
-                    t.getRoute().profit = t.getFareAmount() + t.getTipAmount();
-
                     // add to window
-                    profitCells.add(t.getRoute());
-                    emptyTaxiCells.add(t.getRoute());
+                    tripEmptyTaxis.add(t);
+                    tripProfits.add(t);
 
-                    List<Cell> bestCells = bestCells(emptyTaxiCells, profitCells);
+                    List<CellProfitability> bestCells = bestCells(tripEmptyTaxis, tripProfits);
                     return Tuple.of(bestCells, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived());
                 })
@@ -191,18 +195,19 @@ public class EDAPrimer extends Architecture {
 
         // wait for onComplete event
         completeSignal.await();
+        id = 0;
         return System.currentTimeMillis() - startTime;
     }
 
 
-    private List<RouteCount> bestRoutes(Queue<Route> routes) {
+    private List<RouteCount> bestRoutes(Queue<Trip> trips) {
         // a priority queue for top 10 routes. Orders by natural number.
         BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
 
-        Map<Route, RouteCount> routesCounted = routes.stream()
-                .collect(Collectors.groupingBy(route -> route,
+        Map<Route, RouteCount> routesCounted = trips.stream()
+                .collect(Collectors.groupingBy(Trip::getRoute500,
                                 Collectors.collectingAndThen(
-                                        Collectors.mapping(RouteCount::fromRoute, Collectors.reducing(RouteCount::combine)),
+                                        Collectors.mapping(RouteCount::fromTrip, Collectors.reducing(RouteCount::combine)),
                                         Optional::get
                                 )
                         )
@@ -212,7 +217,6 @@ public class EDAPrimer extends Architecture {
             top10.offer(rc);
         });
 
-
         List<RouteCount> top10SortedNew = new LinkedList<>(top10);
         // sort routes
         top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
@@ -220,41 +224,52 @@ public class EDAPrimer extends Architecture {
         return top10SortedNew;
     }
 
-    private List<Cell> bestCells(ArrayDeque<Route> emptyTaxiCells, Queue<Route> profitCells) {
+    private List<CellProfitability> bestCells(ArrayDeque<Trip> tripEmptyTaxis, ArrayDeque<Trip> tripProfits) {
         // a priority queue for top 10 cells. Orders by natural number.
-        BoundedPriorityQueue<Cell> top10 = new BoundedPriorityQueue<>(Comparator.<Cell>naturalOrder(), 10);
+        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
 
         // for empty taxis we need reverse as the most recent unique taxi medallion matters
-        Map<Cell, RouteCount> emptyTaxis = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
-                emptyTaxiCells.descendingIterator(), Spliterator.ORDERED), false)
+        Map<Cell, EmptyTaxisCount> emptyTaxis = StreamSupport.stream(Spliterators.spliteratorUnknownSize(
+                tripEmptyTaxis.descendingIterator(), Spliterator.ORDERED), false)
                 // filter by distinct medallion, this is unique taxi identifier
                 // we want only the most recent unique empty taxis
-                .filter(distinctByKey(r -> r.medallion))
+                .filter(distinctByKey(Trip::getMedallion))
                 // group by end cell
-                .collect(Collectors.groupingBy(route -> route.getEndCell(),
+                .collect(Collectors.groupingBy(t -> t.getRoute250().getEndCell(),
                                 Collectors.collectingAndThen(
-                                        Collectors.mapping(RouteCount::fromRoute, Collectors.reducing(RouteCount::combine)),
+                                        Collectors.mapping(EmptyTaxisCount::fromTrip,
+                                        Collectors.reducing(EmptyTaxisCount::combine)),
                                         Optional::get
                                 )
                         )
                 );
-        Map<Cell, RouteCount> profits = profitCells.stream()
+        Map<Cell, CellProfit> profits = tripProfits.stream()
                 // profit for starting cell, so we need to group by start cell
-                .collect(Collectors.groupingBy(route -> route.getStartCell(),
+                .collect(Collectors.groupingBy(trip -> trip.getRoute250().getStartCell(),
                                 Collectors.collectingAndThen(
-                                        Collectors.mapping(RouteCount::fromRouteProfit, Collectors.reducing(RouteCount::combineByProfit)),
+                                        Collectors.mapping(CellProfit::fromTrip,
+                                        Collectors.reducing(CellProfit::combine)),
                                         Optional::get
                                 )
                         )
                 );
-        emptyTaxis.forEach((c, rc) -> {
-            c.profitability = profits.get(c).medianProfit.getMedian() / rc.count;
-            top10.add(c);
+
+        // only consider those cells that have empty taxis
+        emptyTaxis.forEach((ec, etc) -> {
+            // get the profit for current end cell
+            CellProfit endCellProfit = profits.get(ec);
+            if (endCellProfit != null) {
+                top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+                        endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                        endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+            } else {
+                top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+            }
         });
 
-        List<Cell> top10SortedNew = new LinkedList<>(top10);
+        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
         // sort routes
-        top10SortedNew.sort(Comparator.<Cell>reverseOrder());
+        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
 
         return top10SortedNew;
 

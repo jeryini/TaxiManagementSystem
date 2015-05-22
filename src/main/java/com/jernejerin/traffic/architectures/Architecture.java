@@ -1,11 +1,14 @@
 package com.jernejerin.traffic.architectures;
 
 import com.jernejerin.traffic.entities.Cell;
+import com.jernejerin.traffic.entities.CellProfitability;
 import com.jernejerin.traffic.entities.RouteCount;
+import com.jernejerin.traffic.entities.Trip;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TaxiStream;
 import org.apache.commons.cli.*;
 import reactor.Environment;
+import reactor.fn.tuple.Tuple2;
 import reactor.io.codec.StandardCodecs;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
@@ -123,18 +126,18 @@ public abstract class Architecture {
      * @param timeStart time in milliseconds when the event arrived
      */
     public void writeTop10ChangeQuery1(List<RouteCount> top10, LocalDateTime pickupDateTime,
-                                               LocalDateTime dropOffDateTime, long timeStart) {
+                                               LocalDateTime dropOffDateTime, long timeStart, Trip trip) {
         // compute delay now as we do not want to take in the actual processing of the result
         long delay = System.currentTimeMillis() - timeStart;
 
         // build content string for output
-        String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
+        String content = trip.getRoute500() + ", " + pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
 
         // iterate over all the most frequent routes
         for (RouteCount routeCount : top10) {
-            content += routeCount.route.getStartCell().getEast() + "." + routeCount.route.getStartCell().getSouth() +
-                ", " + routeCount.route.getEndCell().getEast() + "." + routeCount.route.getEndCell().getSouth() +
-                    " (" + routeCount.count + "),";
+            content += routeCount.getRoute().getStartCell().getEast() + "." + routeCount.getRoute().getStartCell().getSouth() +
+                ", " + routeCount.getRoute().getEndCell().getEast() + "." + routeCount.getRoute().getEndCell().getSouth() +
+                    " (" + routeCount.getCount() + "),";
         }
 
         // add a start time, end and a delay
@@ -158,7 +161,7 @@ public abstract class Architecture {
      * @param dropOffDateTime the drop off date time of the event that change the top 10 cells
      * @param timeStart time in milliseconds when the event arrived
      */
-    public void writeTop10ChangeQuery2(List<Cell> top10, LocalDateTime pickupDateTime,
+    public void writeTop10ChangeQuery2(List<CellProfitability> top10, LocalDateTime pickupDateTime,
                                        LocalDateTime dropOffDateTime, long timeStart) {
         // compute delay now as we do not want to take in the actual processing of the result
         long delay = System.currentTimeMillis() - timeStart;
@@ -167,8 +170,10 @@ public abstract class Architecture {
         String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
 
         // iterate over all the most profitable cells
-        for (Cell cell : top10) {
-            content += cell.getEast() + "." + cell.getSouth() + " (" + cell.profitability + "),";
+        for (CellProfitability cellProfitability : top10) {
+            content += cellProfitability.getCell().getEast() + "." + cellProfitability.getCell().getSouth() +
+                ", " + cellProfitability.getEmptyTaxis() + ", " + cellProfitability.getMedianProfit() + ", " +
+                cellProfitability.getProfitability() + ", ";
         }
 
         // add a start time, end and a delay

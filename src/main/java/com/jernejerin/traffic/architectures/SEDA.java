@@ -41,6 +41,8 @@ public class SEDA extends Architecture {
     /** The default number of threads for stage 2. */
     private static int stage2T = 20;
 
+    static int id = 0;
+
     DispatcherSupplier supplierStage1;
     DispatcherSupplier supplierStage2;
 
@@ -97,7 +99,7 @@ public class SEDA extends Architecture {
                 // challenge recommendation
                 //                LOGGER.log(Level.INFO, "Distributing for ticket = " +
 //                        t + " from thread = " + Thread.currentThread());
-                return Tuple.of(t, System.currentTimeMillis());
+                return Tuple.of(t, System.currentTimeMillis(), id++);
             })
             // parallelize stream tasks to separate streams for stage 1 - PARSING AND SAVING DATA
             .partition(stage1T)
@@ -107,7 +109,7 @@ public class SEDA extends Architecture {
                 // dispatch on separate stream
                 .dispatchOn(supplierStage1.get())
                 // stage 1 is for validating ticket structure and saving it into the DB
-                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
+                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                 // group by trip validation
                 .groupBy(t -> t != null)
                 .map(tripValidStream -> {
