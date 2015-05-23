@@ -1,217 +1,240 @@
-//package com.jernejerin.traffic.architectures;
-//
-//import com.aliasi.util.BoundedPriorityQueue;
-//import com.jernejerin.traffic.entities.Cell;
-//import com.jernejerin.traffic.entities.Route;
-//import com.jernejerin.traffic.entities.RouteCount;
-//import com.jernejerin.traffic.entities.Taxi;
-//import com.jernejerin.traffic.helper.TaxiStream;
-//import com.jernejerin.traffic.helper.TripOperations;
-//import reactor.fn.tuple.Tuple;
-//import reactor.fn.tuple.Tuple2;
-//import reactor.rx.Streams;
-//
-//import java.io.FileOutputStream;
-//import java.io.IOException;
-//import java.time.ZoneOffset;
-//import java.util.*;
-//import java.util.concurrent.CountDownLatch;
-//import java.util.logging.Level;
-//import java.util.logging.Logger;
-//import java.util.stream.Collectors;
-//
-///**
-// * <p>
-// * An example of a event driven architecture - EDA.
-// *
-// * @author Jernej Jerin
-// */
-//public class EDA extends Architecture {
-//    private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
-//
-//    public EDA(ArchitectureBuilder builder) {
-//        // call super constructor to initialize fields from builder
-//        super(builder);
-//    }
-//
-//    public static void main(String[] args) throws InterruptedException {
-//        LOGGER.log(Level.INFO, "Starting EDA solution from thread = " + Thread.currentThread());
-//
-//        // create Architecture builder
-//        ArchitectureBuilder builder = new ArchitectureBuilder();
-//
-//        // set host and port from command line options
-//        builder.setOptionsCmd(args);
-//
-//        // construct the EDA solution using the builder
-//        Architecture eda = new EDA(builder);
-//
-//        // run the solution
-//        eda3.run();
-//    }
-//
-//    public long run() throws InterruptedException {
-//        long startTime = System.currentTimeMillis();
-//
-//        // create a taxi service
-//        this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
-//
-//        // current top 10 sorted
-//        final List<RouteCount> top10Routes = new LinkedList<>();
-//        CountDownLatch completeSignal = new CountDownLatch(1);
-//        Queue<Route> routes = new ArrayDeque<>();
-//
-//        taxiStream.getTrips()
-//                .map(t -> {
-//                    // create a tuple of string trip and current time for computing delay
-//                    // As this is our entry point it is appropriate to start the time here,
-//                    // before any parsing is being done. This also in record with the Grand
-//                    // challenge recommendation
-//                    return Tuple.of(t, System.currentTimeMillis());
-//                })
-//                .observeComplete(v -> completeSignal.countDown())
-//                        // parsing and validating trip structure
-//                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2()))
-//                        // group by trip validation
-//                .groupBy(t -> t != null)
-//                .consume(tripValidStream -> {
-//                    // if trip is valid continue with operations on the trip
-//                    if (tripValidStream.key()) {
-//                        tripValidStream
-//                                .map(t -> {
-//                                    // save ticket
-////                            TripOperations.insertTrip(t);
-//                                    return t;
-//                                })
-//                                        // group by if route for the trip is valid, as
-//                                        // we need route in follow up operations
-//                                .groupBy(t -> t.getRoute() != null)
-//                                .consume(routeValidStream -> {
-//                                    if (routeValidStream.key()) {
-//                                        routeValidStream
-//                                                .consume(t -> {
-//                                                    taxiStream.query1.onNext(t);
-//                                                    taxiStream.query2.onNext(t);
-//                                                });
-//                                    } else {
-//                                        routeValidStream.consume(//trip ->
-////                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
-//                                        );
-//                                    }
-//                                });
-//                    } else {
-//                        tripValidStream.consume(//trip ->
-////                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
-//                        );
-//                    }
-//                });
-//        taxiStream.query1
-//                // query 1: Frequent routes
-//                .map(t -> {
-//                    while (routes.peek() != null && routes.peek().getDropOffDatetime().isBefore(
-//                            t.getDropOffDatetime().minusMinutes(30))) {
-//                        Route route = routes.poll();
-//                        // recompute top10 only if the polled route is in the current top 10
-//                        if (top10Routes.contains(route)) {
-//                            List<RouteCount> bestRoutes = bestRoutes(routes);
-//                            if (!top10Routes.equals(bestRoutes)) {
-//                                top10Routes.clear();
-//                                top10Routes.addAll(bestRoutes);
-//                                // if there is change in top 10, write it
-//                                writeTop10ChangeQuery1(bestRoutes, route.getPickupDatetime().plusMinutes(30),
-//                                        route.getDropOffDatetime().plusMinutes(30),
-//                                        t.getTimestampReceived());
-//                            }
-//                        }
-//                    }
-//
-//                    // add to window
-//                    routes.add(t.getRoute());
-//                    List<RouteCount> bestRoutes = bestRoutes(routes);
-//                    return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
-//                            t.getTimestampReceived());
-//                })
-//                .consume(ct -> {
-//                    if (!top10Routes.equals(ct.getT1())) {
-//                        top10Routes.clear();
-//                        top10Routes.addAll(ct.getT1());
-//                        writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4());
-//                    }
-//                });
-//
-//        taxiStream.query2
-//                .consume();
-//
-//        // read the stream from file: for local testing
-//        taxiStream.readStream();
-//
-//        // wait for onComplete event
-//        completeSignal.await();
-//        return System.currentTimeMillis() - startTime;
-//    }
-//
-//
-//    /**
-//     * Computes top 10 best routes sorted by frequency and last freshest event.
-//     *
-//     * @param routes a window of routes in past 30 minutes
-//     * @return a list of 10 best routes
-//     */
-//    private static List<RouteCount> bestRoutes(Queue<Route> routes) {
-//        // a priority queue for top 10 routes. Orders by natural number.
-//        BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
-//
-//        Map<Route, RouteCount> routesCounted = routes.stream()
-//                .collect(Collectors.groupingBy(route -> route,
-//                                Collectors.collectingAndThen(
-//                                        Collectors.mapping(RouteCount::fromRoute, Collectors.reducing(RouteCount::combine)),
-//                                        Optional::get
-//                                )
-//                        )
-//                );
-//
-//        routesCounted.forEach((r, rc) -> {
-//            top10.offer(rc);
-//        });
-//
-//
-//        List<RouteCount> top10SortedNew = new LinkedList<>(top10);
-//        // sort routes
-//        top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
-//
-//        return top10SortedNew;
-//    }
-//
-//    /**
-//     * Computes top 10 best routes sorted by frequency and last freshest event. Compare to upper method
-//     * this was proven to be of worse performance.
-//     *
-//     * @param routes a window of routes in past 30 minutes
-//     * @return a list of 10 best routes
-//     */
-//    private List<RouteCount> bestRoutesPerformanceWorse(Queue<Route> routes) {
-//        // a priority queue for top 10 routes. Orders by natural number.
-//        BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
-//
-//        // we are performing only stateless intermediate operations
-//        Map<Route, Integer> routesCounted = routes.stream()
-//                // group by the same routes
-//                .collect(Collectors.groupingBy(r -> r))
-//                        // we get a list of routes
-//                .values().stream()
-//                .collect(Collectors.toMap(
-//                        // select for key the route, which was updated last. For the value set the list size.
-//                        lst -> lst.stream().max(Comparator.comparing(Route::getLastUpdated)).get(),
-//                        List::size
-//                ));
-//        routesCounted.forEach((r, c) -> {
-//            top10.offer(new RouteCount(r, c));
-//        });
-//
-//        // sort routes
-//        List<RouteCount> top10SortedNew = new LinkedList<>(top10);
-//        top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
-//
-//        return  top10SortedNew;
-//    }
-//}
+package com.jernejerin.traffic.architectures;
+
+import com.aliasi.util.BoundedPriorityQueue;
+import com.jernejerin.traffic.entities.*;
+import com.jernejerin.traffic.helper.TaxiStream;
+import com.jernejerin.traffic.helper.TripOperations;
+import reactor.fn.tuple.Tuple;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
+
+/**
+ * <p>
+ * An example of a single threaded event driven architecture - EDA.
+ * This solution consists of LinkedHashMap.
+ *
+ * @author Jernej Jerin
+ */
+public class EDA extends Architecture {
+    private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
+    private static int id = 0;
+
+    public EDA(ArchitectureBuilder builder) {
+        // call super constructor to initialize fields from builder
+        super(builder);
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        LOGGER.log(Level.INFO, "Starting single threaded EDA 3 solution from thread = " + Thread.currentThread());
+
+        // create Architecture builder
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +
+                EDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/" +
+                EDA.class.getSimpleName() + "_query2.txt");
+
+        // set host and port from command line options
+        builder.setOptionsCmd(args);
+
+        // construct the EDA solution using the builder
+        Architecture eda = new EDA(builder);
+
+        // run the solution
+        eda.run();
+    }
+
+    public long run() throws InterruptedException {
+        long startTime = System.currentTimeMillis();
+
+        // create a taxi service
+        this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
+
+        // current top 100 sorted
+        final LinkedList<RouteCount> top100Routes = new LinkedList<>();
+
+        // time windows
+        final Queue<Trip> trips = new ArrayDeque<>();
+        final Map<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
+
+        CountDownLatch completeSignal = new CountDownLatch(1);
+
+
+        taxiStream.getTrips()
+                .map(t -> {
+                    // create a tuple of string trip and current time for computing delay
+                    // As this is our entry point it is appropriate to start the time here,
+                    // before any parsing is being done. This also in record with the Grand
+                    // challenge recommendation
+                    return Tuple.of(t, System.currentTimeMillis(), id++);
+                })
+                .observeComplete(v -> completeSignal.countDown())
+                        // parsing and validating trip structure
+                .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
+                        // group by trip validation
+                .groupBy(t -> t != null)
+                .consume(tripValidStream -> {
+                    // if trip is valid continue with operations on the trip
+                    if (tripValidStream.key()) {
+                        tripValidStream
+                                .groupBy(t -> t.getRoute250() != null)
+                                .consume(routeValidStream -> {
+                                    if (routeValidStream.key()) {
+                                        routeValidStream
+                                                .consume(t -> {
+                                                    taxiStream.query1.onNext(t);
+                                                    taxiStream.query2.onNext(t);
+                                                });
+                                    } else {
+                                        routeValidStream.consume(trip ->
+                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
+                                        );
+                                    }
+                                });
+                    } else {
+                        tripValidStream.consume(trip ->
+                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
+                        );
+                    }
+                });
+        // query 1: Frequent routes
+        taxiStream.query1
+                .map(t -> {
+                    // trips leaving the window
+                    while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
+                            - 30 * 60 * 1000) {
+                        // remove it from queue
+                        Trip trip = trips.poll();
+
+                        // update the route count for the route of the trip, leaving the window
+                        RouteCount routeCount = routesCount.get(trip.getRoute500());
+                        routeCount.setCount(routeCount.getCount() - 1);
+                        routesCount.put(trip.getRoute500(), routeCount);
+
+                        // if route is in top 100, then resort the top 100
+                        // if it is not in top 100, then we do not have to do
+                        // anything because counting down the route count
+                        // will not change the top 100
+                        int i = top100Routes.indexOf(routeCount);
+                        if (i != -1) {
+                            List<RouteCount> top10 = null;
+
+                            // save current top 10 for future comparison only if
+                            // the route of the removed trip lies in top 10
+                            if (i <= 9) {
+                                top10 = new LinkedList<>(top100Routes.subList(0, top100Routes.size() < 10 ?
+                                        top100Routes.size() : 10));
+                            }
+
+                            // flip elements from i-th to the last one
+                            // until the current route is smaller
+                            for (int j = i, k = i + 1; k < top100Routes.size(); j++, k++) {
+                                // route count at current position is smaller, then switch places
+                                if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
+                                    Collections.swap(top100Routes, j, k);
+                                }
+                            }
+
+                            // if the element falls into the last place in top 100, then we need to
+                            // resort all route count
+                            if (top100Routes.get(top100Routes.size() - 1).equals(routeCount)) {
+                                // a priority queue for top 10 routes. Orders by natural number.
+                                BoundedPriorityQueue<RouteCount> newTop100Routes = new BoundedPriorityQueue<>
+                                        (Comparator.<RouteCount>naturalOrder(), 100);
+
+                                // try to add each route count to the top 100 list. This way we get sorted top 100 with
+                                // time complexity n * log(100) + 100 * log(100) vs. n * log(n)
+                                routesCount.forEach((r, rc) -> newTop100Routes.offer(rc));
+
+                                // copy to the top 100 routes and resort (100 * log(100))
+                                Collections.copy(top100Routes, new LinkedList<>(newTop100Routes));
+                                Collections.sort(top100Routes, Comparator.<RouteCount>reverseOrder());
+                            }
+
+                            // check if top 10 has changed
+                            if (top10 != null && !top10.equals(top100Routes.subList(0, top100Routes.size() < 10 ?
+                                    top100Routes.size() : 10))) {
+                                writeTop10ChangeQuery1(top100Routes.subList(0, top100Routes.size() < 10 ? top100Routes.size() : 10),
+                                        trip.getPickupDatetime().plusMinutes(30),
+                                        trip.getDropOffDatetime().plusMinutes(30),
+                                        t.getTimestampReceived(), trip);
+                            }
+                        }
+                    }
+
+                    // add to window
+                    trips.add(t);
+
+                    // update the route count and trip id for the route of the incoming trip
+                    // if the rout count does not yet exist, create a new one
+                    RouteCount routeCount = routesCount.getOrDefault(t.getRoute500(),
+                            new RouteCount(t.getRoute500(), t.getId(), 0));
+                    routeCount.setCount(routeCount.getCount() + 1);
+                    routeCount.setId(t.getId());
+                    routesCount.put(t.getRoute500(), routeCount);
+
+                    // store current top 10
+                    LinkedList<RouteCount> top10 = new LinkedList<>(top100Routes.subList(0, top100Routes.size() < 10 ?
+                            top100Routes.size() : 10));
+
+                    int i = top100Routes.indexOf(routeCount);
+                    if (i != -1) {
+                        top100Routes.set(i, routeCount);
+                        // flip elements from i-th to the first one
+                        // until the current route is larger
+                        for (int j = i - 1, k = i; j >= 0; j--, k--) {
+                            // route count at current position is smaller, then switch places
+                            if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
+                                Collections.swap(top100Routes, j, k);
+                            }
+                        }
+                    }
+                    else {
+                        // check top 100 size
+                        if (top100Routes.size() < 100) {
+                            top100Routes.addLast(routeCount);
+                        }
+                        // compare it with the last element in top 100
+                        else if (top100Routes.getLast().compareTo(routeCount) < 0) {
+                            top100Routes.set(99, routeCount);
+                        }
+
+                        for (int j = top100Routes.size() - 2, k = top100Routes.size() - 1; j >= 0; j--, k--) {
+                            // route count at current position is smaller, then switch places
+                            if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
+                                Collections.swap(top100Routes, j, k);
+                            }
+                        }
+                    }
+                    return Tuple.of(top10, t.getPickupDatetime(), t.getDropOffDatetime(),
+                            t.getTimestampReceived(), t);
+
+                })
+                .consume(ct -> {
+                    if (!ct.getT1().equals(top100Routes.subList(0, top100Routes.size() < 10 ?
+                            top100Routes.size() : 10))) {
+                        writeTop10ChangeQuery1(top100Routes.subList(0, top100Routes.size() < 10 ?
+                                        top100Routes.size() : 10), ct.getT2(), ct.getT3(), ct.getT4(),
+                                ct.getT5());
+                    }
+                });
+
+        // query 2: Frequent routes
+        taxiStream.query2
+                .consume();
+
+        // read the stream from file: for local testing
+        taxiStream.readStream();
+
+        // wait for onComplete event
+        completeSignal.await();
+        id = 0;
+        return System.currentTimeMillis() - startTime;
+    }
+}

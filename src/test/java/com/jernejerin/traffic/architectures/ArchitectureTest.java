@@ -45,20 +45,25 @@ public class ArchitectureTest extends TestCase {
      */
     @Test
     public void testRun() throws Exception {
-        Architecture eda3 = new EDAPrimer(new ArchitectureBuilder().fileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
-        eda3.run();
+        Architecture eda1 = new EDAPrimer(new ArchitectureBuilder().fileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
+        eda1.run();
 
-        BufferedReader eda2BuffReader = new BufferedReader(new FileReader(eda3.fileNameQuery1Output));
-        BufferedReader eda3BuffReader = new BufferedReader(new FileReader(eda3.fileNameQuery1Output));
+        Architecture eda2 = new EDA(new ArchitectureBuilder().fileNameQuery1Output("output/" + EDA.class.getSimpleName() + "_query1.txt"));
+        eda2.run();
+
+        BufferedReader eda1BuffReader = new BufferedReader(new FileReader(eda1.fileNameQuery1Output));
+        BufferedReader eda2BuffReader = new BufferedReader(new FileReader(eda2.fileNameQuery1Output));
 
         String expectedLine;
-        while ((expectedLine = eda2BuffReader.readLine()) != null) {
+        while ((expectedLine = eda1BuffReader.readLine()) != null) {
             expectedLine = expectedLine.substring(0, expectedLine.lastIndexOf(","));
-            String actualLine = eda3BuffReader.readLine();
+            String actualLine = eda2BuffReader.readLine();
             actualLine = actualLine.substring(0, actualLine.lastIndexOf(","));
-            assertNotNull("EDA3 had more lines then the EDA2.", actualLine);
+            assertNotNull(eda1.getClass().getSimpleName() + " had more lines then the " +
+                    eda2.getClass().getSimpleName(), actualLine);
             assertEquals(expectedLine, actualLine);
         }
-        assertNull("EDA2 had more lines then the EDA3.", eda3BuffReader.readLine());
+        assertNull(eda2.getClass().getSimpleName() + "had more lines then the " + eda1.getClass().getSimpleName(),
+                eda2BuffReader.readLine());
     }
 }

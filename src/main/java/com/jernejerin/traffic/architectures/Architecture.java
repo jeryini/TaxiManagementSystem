@@ -131,7 +131,7 @@ public abstract class Architecture {
         long delay = System.currentTimeMillis() - timeStart;
 
         // build content string for output
-        String content = trip.getRoute500() + ", " + pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
+        String content = pickupDateTime.toString() + ", " + dropOffDateTime.toString() + ", ";
 
         // iterate over all the most frequent routes
         for (RouteCount routeCount : top10) {

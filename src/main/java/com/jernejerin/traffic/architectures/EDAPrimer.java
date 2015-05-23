@@ -18,8 +18,7 @@ import java.util.stream.StreamSupport;
 
 /**
  * <p>
- * An example of a single threaded event driven architecture - EDA.
- * This solution consists of LinkedHashMap.
+ * An example of a possible implementation of event driven architecture - EDA.
  *
  * @author Jernej Jerin
  */

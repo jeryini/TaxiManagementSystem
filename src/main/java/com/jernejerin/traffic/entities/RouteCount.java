@@ -14,8 +14,8 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
  */
 public class RouteCount implements Comparable<RouteCount> {
     private final Route route;
-    private final int id;
-    private final long count;
+    private int id;
+    private long count;
 
     public RouteCount(Route route, int id, long count) {
         this.route = route;
@@ -33,6 +33,14 @@ public class RouteCount implements Comparable<RouteCount> {
 
     public long getCount() {
         return count;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
+
+    public void setCount(long count) {
+        this.count = count;
     }
 
     public static RouteCount fromTrip(Trip trip) {

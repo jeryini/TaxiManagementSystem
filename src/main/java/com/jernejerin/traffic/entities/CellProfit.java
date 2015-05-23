@@ -38,9 +38,9 @@ public class CellProfit {
         CellProfit recent = cellProfit1.id > cellProfit2.id ? cellProfit1 : cellProfit2;
 
         // combine the median profits
-        recent.medianProfit.maxHeap.forEach(cellProfit2.medianProfit::addNumberToStream);
-        recent.medianProfit.minHeap.forEach(cellProfit2.medianProfit::addNumberToStream);
+        cellProfit2.medianProfit.maxHeap.forEach(cellProfit1.medianProfit::addNumberToStream);
+        cellProfit2.medianProfit.minHeap.forEach(cellProfit1.medianProfit::addNumberToStream);
 
-        return new CellProfit(recent.id, recent.medianProfit);
+        return new CellProfit(recent.id, cellProfit1.medianProfit);
     }
 }
