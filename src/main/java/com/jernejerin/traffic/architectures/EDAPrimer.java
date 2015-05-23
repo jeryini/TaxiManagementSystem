@@ -64,7 +64,7 @@ public class EDAPrimer extends Architecture {
         ArrayDeque<Trip> tripProfits = new ArrayDeque<>();
         ArrayDeque<Trip> tripEmptyTaxis = new ArrayDeque<>();
 
-        CountDownLatch completeSignal = new CountDownLatch(1);
+        CountDownLatch completeSignal = new CountDownLatch(2);
 
 
         taxiStream.getTrips()
@@ -75,8 +75,12 @@ public class EDAPrimer extends Architecture {
                     // challenge recommendation
                     return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
-                .observeComplete(v -> completeSignal.countDown())
-                        // parsing and validating trip structure
+                .observeComplete(v -> {
+                    // send complete events to each query
+                    taxiStream.query1.onComplete();
+                    taxiStream.query2.onComplete();
+                })
+                // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                         // group by trip validation
                 .groupBy(t -> t != null)
@@ -129,14 +133,17 @@ public class EDAPrimer extends Architecture {
                     List<RouteCount> bestRoutes = bestRoutes(trips);
                     return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);
-            })
-            .consume(ct -> {
-                if (!top10Routes.equals(ct.getT1())) {
-                    top10Routes.clear();
-                    top10Routes.addAll(ct.getT1());
-                    writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
-                }
-            });
+                })
+                .observeComplete(v -> {
+                    completeSignal.countDown();
+                })
+                .consume(ct -> {
+                    if (!top10Routes.equals(ct.getT1())) {
+                        top10Routes.clear();
+                        top10Routes.addAll(ct.getT1());
+                        writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
+                    }
+                });
 
         // query 2: Frequent routes
         taxiStream.query2
@@ -181,6 +188,7 @@ public class EDAPrimer extends Architecture {
                     return Tuple.of(bestCells, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived());
                 })
+                .observeComplete(v -> completeSignal.countDown())
                 .consume(ct -> {
                     if (!top10Cells.equals(ct.getT1())) {
                         top10Cells.clear();
@@ -237,7 +245,7 @@ public class EDAPrimer extends Architecture {
                 .collect(Collectors.groupingBy(t -> t.getRoute250().getEndCell(),
                                 Collectors.collectingAndThen(
                                         Collectors.mapping(EmptyTaxisCount::fromTrip,
-                                        Collectors.reducing(EmptyTaxisCount::combine)),
+                                                Collectors.reducing(EmptyTaxisCount::combine)),
                                         Optional::get
                                 )
                         )

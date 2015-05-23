@@ -60,10 +60,10 @@ public class EDA extends Architecture {
         final LinkedList<RouteCount> top100Routes = new LinkedList<>();
 
         // time windows
-        final Queue<Trip> trips = new ArrayDeque<>();
-        final Map<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
+        final ArrayDeque<Trip> trips = new ArrayDeque<>();
+        final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
 
-        CountDownLatch completeSignal = new CountDownLatch(1);
+        CountDownLatch completeSignal = new CountDownLatch(2);
 
 
         taxiStream.getTrips()
@@ -74,7 +74,11 @@ public class EDA extends Architecture {
                     // challenge recommendation
                     return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
-                .observeComplete(v -> completeSignal.countDown())
+                .observeComplete(v -> {
+                    // send complete events to each query
+                    taxiStream.query1.onComplete();
+                    taxiStream.query2.onComplete();
+                })
                         // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                         // group by trip validation
@@ -115,7 +119,12 @@ public class EDA extends Architecture {
                         // update the route count for the route of the trip, leaving the window
                         RouteCount routeCount = routesCount.get(trip.getRoute500());
                         routeCount.setCount(routeCount.getCount() - 1);
-                        routesCount.put(trip.getRoute500(), routeCount);
+
+                        // if count is 0 then remove the route count to avoid unnecessary iteration
+                        if (routeCount.getCount() == 0)
+                            routesCount.remove(routeCount);
+                        else
+                            routesCount.put(trip.getRoute500(), routeCount);
 
                         // if route is in top 100, then resort the top 100
                         // if it is not in top 100, then we do not have to do
@@ -216,6 +225,9 @@ public class EDA extends Architecture {
                             t.getTimestampReceived(), t);
 
                 })
+                .observeComplete(v -> {
+                    completeSignal.countDown();
+                })
                 .consume(ct -> {
                     if (!ct.getT1().equals(top100Routes.subList(0, top100Routes.size() < 10 ?
                             top100Routes.size() : 10))) {
@@ -227,6 +239,9 @@ public class EDA extends Architecture {
 
         // query 2: Frequent routes
         taxiStream.query2
+                .observeComplete(v -> {
+                    completeSignal.countDown();
+                })
                 .consume();
 
         // read the stream from file: for local testing

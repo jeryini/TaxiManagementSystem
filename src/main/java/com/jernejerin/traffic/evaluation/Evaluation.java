@@ -2,6 +2,7 @@ package com.jernejerin.traffic.evaluation;
 
 import com.jernejerin.traffic.architectures.Architecture;
 import com.jernejerin.traffic.architectures.ArchitectureBuilder;
+import com.jernejerin.traffic.architectures.EDA;
 import com.jernejerin.traffic.architectures.EDAPrimer;
 import com.jernejerin.traffic.helper.MedianOfStream;
 import reactor.fn.tuple.Tuple;
@@ -25,9 +26,14 @@ import java.util.List;
  */
 public class Evaluation {
     public static void main(String[] args) throws InterruptedException, IOException {
-        Architecture edaPrimer = new EDAPrimer(new ArchitectureBuilder());
-        Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result2 = evaluate(edaPrimer, 10);
-        System.out.println("EDAPrimer:");
+//        Architecture edaPrimer = new EDAPrimer(new ArchitectureBuilder());
+//        Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result = evaluate(edaPrimer, 10);
+//        System.out.println("EDAPrimer:");
+//        printResult(result);
+
+        Architecture eda = new EDA(new ArchitectureBuilder());
+        Tuple3<Double, Tuple2<Double, Double>, List<Tuple3<Long, Double, Double>>> result2 = evaluate(eda, 10);
+        System.out.println("EDA:");
         printResult(result2);
     }
 

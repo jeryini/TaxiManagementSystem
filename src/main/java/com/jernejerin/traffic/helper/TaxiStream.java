@@ -66,8 +66,6 @@ public class TaxiStream {
         parser.beginParsing(getReader(this.fileName));
 
         String[] row;
-        int id = 0;
-
         // read line by line
         while ((row = parser.parseNext()) != null) {
             // create a string from array separated by comma
@@ -75,9 +73,6 @@ public class TaxiStream {
 
             // sink values to trips broadcaster
             this.trips.onNext(trip);
-
-            // need to sleep because it is to fast :)
-            Thread.sleep(1);
         }
         // close the channel as we are finished streaming data
         // this sends a complete signal which we can in turn observe
