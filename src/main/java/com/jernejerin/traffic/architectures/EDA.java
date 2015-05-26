@@ -24,7 +24,7 @@ import java.util.stream.StreamSupport;
  * @author Jernej Jerin
  */
 public class EDA extends Architecture {
-    private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
+    private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
     private static int id = 0;
 
     public EDA(ArchitectureBuilder builder) {

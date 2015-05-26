@@ -14,12 +14,16 @@ import java.util.concurrent.LinkedBlockingQueue;
  * @author Jernej Jerin
  */
 public class Route {
+    private long id;
     private Cell startCell;
     private Cell endCell;
 
     public Route(Cell startCell, Cell endCell) {
         this.startCell = startCell;
         this.endCell = endCell;
+        // convert from 300-base system to decimal system
+        this.id = startCell.getEast() * 300L * 300L * 300L + startCell.getSouth() * 300L * 300L +
+                endCell.getEast() * 300L + endCell.getSouth();
     }
 
     public Cell getStartCell() {
