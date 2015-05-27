@@ -8,6 +8,7 @@ import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
+import com.mysql.jdbc.PerVmServerConfigCacheFactory;
 import reactor.fn.tuple.Tuple;
 import scala.concurrent.duration.Duration;
 
@@ -149,9 +150,11 @@ public class AEDA extends Architecture {
                     trips.add(t);
 
                     // tell the root Actor to increment the route count for the route in the added trip
-                    rootTop10Routes.tell(new RouteActor.IncrementRoute(t.getRoute500(), t.getRoute500().getId()), ActorRef.noSender());
+                    rootTop10Routes.tell(new RouteActor.IncrementRoute(t.getRoute500(), t.getRoute500().getId(), t.getId()), inbox.getRef());
                     // TODO (Jernej Jerin): Again a blocking call!
-                    List<RouteCount> newTop10Routes = (List<RouteCount>)inbox.receive(Duration.create(Long.MAX_VALUE, "seconds"));
+                    // TODO (Jernej Jerin): Problem with casting!
+                    List<RouteCount> newTop10Routes = Arrays.asList((RouteCount[])inbox.receive(Duration.create(10000, "seconds")));
+                    Collections.sort(newTop10Routes);
 
                     return Tuple.of(newTop10Routes, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);
