@@ -42,6 +42,14 @@ public class Route {
         this.endCell = endCell;
     }
 
+    public long getId() {
+        return id;
+    }
+
+    public void setId(long id) {
+        this.id = id;
+    }
+
     @Override
     /**
      * Compute hash code by using Apache Commons Lang HashCodeBuilder.
