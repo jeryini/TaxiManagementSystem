@@ -58,9 +58,11 @@ public class RouteActor {
     public static class DecrementRoute implements Serializable {
         public static final long serialVersionUID = 1;
         public final Route route;
+        public final long routeId;
 
-        public DecrementRoute(Route route) {
+        public DecrementRoute(Route route, long routeId) {
             this.route = route;
+            this.routeId = routeId;
         }
     }
 
@@ -88,7 +90,9 @@ public class RouteActor {
             receive(ReceiveBuilder.
                     // message that contains request from parent to get current top 10 routes. Respond with current
                     // top 10 routes.
-                    match(GetTop10.class, message -> sender().tell(new Top10((RouteCount[]) top10Routes.toArray()), self())).
+                    match(GetTop10.class, message -> {
+                        sender().tell(new Top10(top10Routes.toArray(new RouteCount[top10Routes.size()])), self());
+                    }).
 
                     // increment route message
                     match(IncrementRoute.class, message -> {
@@ -110,11 +114,11 @@ public class RouteActor {
                             if (id < 10) {
                                 // id less then 10, then create leaf node
                                 topRouteNodes[bucket] = context().actorOf(Props.create(TopRouteLeafNode.class),
-                                        String.valueOf(id));
+                                        String.valueOf(bucket));
                             } else {
                                 // otherwise create normal node
                                 topRouteNodes[bucket] = context().actorOf(Props.create(TopRouteNode.class),
-                                        String.valueOf(id));
+                                        String.valueOf(bucket));
                             }
                         }
 
@@ -130,7 +134,33 @@ public class RouteActor {
                             }
                         }
                     }).
-//                    match(DecrementRoute.class, message -> )
+
+                    // receive message for decrementing route count value
+                    match(DecrementRoute.class, message -> {
+                        parentNode = sender();
+                        msgCount = 0;
+
+                        // clear top 10 routes
+                        top10Routes.clear();
+
+                        // compute the bucket location for the selected Actor
+                        int bucket = (int) (message.routeId % 10);
+
+                        // and the new id
+                        long id = message.routeId / 10;
+
+                        // send the message to the actor, that is contained in that bucket
+                        topRouteNodes[bucket].tell(new DecrementRoute(message.route, id), self());
+                        msgCount++;
+
+                        // send message to all other actors to get top routes
+                        for (int i = 0; i < topRouteNodes.length; i++) {
+                            if (i != bucket && topRouteNodes[i] != null) {
+                                topRouteNodes[i].tell(new GetTop10(), self());
+                                msgCount++;
+                            }
+                        }
+                    }).
 
                     // receive message from child which is returning its top 10 routes
                     match(Top10.class, message -> {
@@ -146,7 +176,7 @@ public class RouteActor {
                         if (msgCount == 0) {
                             msgCount = 0;
                             // send these top 10 to parent
-                            parentNode.tell(new Top10(top10Routes.toArray(new RouteCount[10])), self());
+                            parentNode.tell(new Top10(top10Routes.toArray(new RouteCount[top10Routes.size()])), self());
                         }
 
                     }).
@@ -163,6 +193,7 @@ public class RouteActor {
 
         public TopRouteLeafNode() {
             receive(ReceiveBuilder.
+                    // message to increment route
                     match(IncrementRoute.class, message -> {
                         // if it does not exist yet, add a new route count with count set to 1
                         if (routesCount[(int)message.routeId] == null) {
@@ -172,6 +203,15 @@ public class RouteActor {
                             routesCount[(int)message.routeId].setCount(routesCount[(int)message.routeId].getCount() + 1);
                             routesCount[(int)message.routeId].setId(message.tripId);
                         }
+
+                        // return this routes to the parent node
+                        sender().tell(new Top10(routesCount), self());
+                    }).
+
+                    // message to decrement route
+                    match(DecrementRoute.class, message -> {
+                        // update count
+                        routesCount[(int) message.routeId].setCount(routesCount[(int) message.routeId].getCount() - 1);
 
                         // return this routes to the parent node
                         sender().tell(new Top10(routesCount), self());

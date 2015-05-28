@@ -46,13 +46,15 @@ public class ArchitectureTest extends TestCase {
     @Test
     public void testRun() throws Exception {
         Architecture eda1 = new EDAPrimer(new ArchitectureBuilder().
-                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
+//                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
+                fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
                 fileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
         eda1.run();
 
-        Architecture eda2 = new EDA(new ArchitectureBuilder().
-                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
-                fileNameQuery1Output("output/" + EDA.class.getSimpleName() + "_query1.txt"));
+        Architecture eda2 = new AEDA(new ArchitectureBuilder().
+//                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
+                fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
+                fileNameQuery1Output("output/" + AEDA.class.getSimpleName() + "_query1.txt"));
         eda2.run();
 
         BufferedReader eda1BuffReader = new BufferedReader(new FileReader(eda1.fileNameQuery1Output));

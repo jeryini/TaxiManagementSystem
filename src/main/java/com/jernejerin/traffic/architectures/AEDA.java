@@ -8,19 +8,13 @@ import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
-import com.mysql.jdbc.PerVmServerConfigCacheFactory;
 import reactor.fn.tuple.Tuple;
 import scala.concurrent.duration.Duration;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * <p>
@@ -73,7 +67,6 @@ public class AEDA extends Architecture {
 
         // time windows
         final ArrayDeque<Trip> trips = new ArrayDeque<>();
-        final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
         final List<RouteCount> top10Routes = new LinkedList<>();
 
         CountDownLatch completeSignal = new CountDownLatch(2);
@@ -130,12 +123,14 @@ public class AEDA extends Architecture {
                         Trip trip = trips.poll();
 
                         // tell the root Actor to decrement the route count for the route in the removed trip
-                        rootTop10Routes.tell(new RouteActor.DecrementRoute(trip.getRoute500()), ActorRef.noSender());
-
+                        inbox.send(rootTop10Routes, new RouteActor.DecrementRoute(trip.getRoute500(),
+                                trip.getRoute500().getId()));
                         // block until we get back the top 10
                         // TODO (Jernej Jerin): Blocking call! Should we compare for top routes in the
                         // TODO (Jernej Jerin): top actor.
-                        List<RouteCount> newTop10Routes = (List<RouteCount>)inbox.receive(Duration.create(Long.MAX_VALUE, "seconds"));
+                        RouteActor.Top10 routeActorTop10 = (RouteActor.Top10) inbox.receive(Duration.create(10000, "seconds"));
+                        List<RouteCount> newTop10Routes = Arrays.asList(routeActorTop10.top10Routes);
+                        Collections.sort(newTop10Routes, Comparator.<RouteCount>reverseOrder());
 
                         if (!newTop10Routes.equals(top10Routes)) {
                             top10Routes.clear();
@@ -150,11 +145,14 @@ public class AEDA extends Architecture {
                     trips.add(t);
 
                     // tell the root Actor to increment the route count for the route in the added trip
-                    rootTop10Routes.tell(new RouteActor.IncrementRoute(t.getRoute500(), t.getRoute500().getId(), t.getId()), inbox.getRef());
+                    // reply should go to the inbox
+                    inbox.send(rootTop10Routes, new RouteActor.IncrementRoute(t.getRoute500(), t.getRoute500().getId(), t.getId()));
+
                     // TODO (Jernej Jerin): Again a blocking call!
                     // TODO (Jernej Jerin): Problem with casting!
-                    List<RouteCount> newTop10Routes = Arrays.asList((RouteCount[])inbox.receive(Duration.create(10000, "seconds")));
-                    Collections.sort(newTop10Routes);
+                    RouteActor.Top10 routeActorTop10 = (RouteActor.Top10) inbox.receive(Duration.create(10000, "seconds"));
+                    List<RouteCount> newTop10Routes = Arrays.asList(routeActorTop10.top10Routes);
+                    Collections.sort(newTop10Routes, Comparator.<RouteCount>reverseOrder());
 
                     return Tuple.of(newTop10Routes, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);
@@ -183,6 +181,7 @@ public class AEDA extends Architecture {
         // wait for onComplete event
         completeSignal.await();
         id = 0;
+        system.shutdown();
         return System.currentTimeMillis() - startTime;
     }
 }
