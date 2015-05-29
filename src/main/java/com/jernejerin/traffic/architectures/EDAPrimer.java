@@ -145,7 +145,7 @@ public class EDAPrimer extends Architecture {
                     }
                 });
 
-        // query 2: Frequent routes
+        // query 2: Profitable cells
         taxiStream.query2
                 .map(t -> {
                     // events leaving window for empty taxis in the last 30 minutes
