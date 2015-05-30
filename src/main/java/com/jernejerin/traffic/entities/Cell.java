@@ -40,10 +40,19 @@ public abstract class Cell {
     protected static final Tuple2<Float, Float> BOTTOM_RIGHT =
             Tuple.of(TOP_LEFT.getT1() - 300f * SOUTH_500, TOP_LEFT.getT2() + 300f * EAST_500);
 
+    protected int id;
     protected int east;
     protected int south;
 
     public Cell() {}
+
+    public int getId() {
+        return id;
+    }
+
+    public void setId(int id) {
+        this.id = id;
+    }
 
     public int getEast() {
         return east;

@@ -14,6 +14,7 @@ public class Cell250 extends Cell {
     public Cell250(float latitude, float longitude) {
         this.east = (int)((-TOP_LEFT.getT2() + longitude) / EAST_250);
         this.south = (int)((TOP_LEFT.getT1() - latitude) / SOUTH_250);
+        this.id = this.east * 600 + this.south;
     }
 
     public float toLatitude() {

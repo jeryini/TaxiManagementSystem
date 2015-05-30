@@ -1,5 +1,6 @@
 package com.jernejerin.traffic.entities;
 
+import com.jernejerin.traffic.helper.MedianOfStream;
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
@@ -10,10 +11,11 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
  */
 public class CellProfitability implements Comparable<CellProfitability> {
     private final Cell cell;
-    private final int id;
-    private final int emptyTaxis;
-    private final double medianProfit;
-    private final double profitability;
+    private int id;
+    private int emptyTaxis;
+    private double medianProfit;
+    private double profitability;
+    private MedianOfStream<Float> medianProfitCell;
 
     public CellProfitability(Cell cell, int id, int emptyTaxis, double medianProfit, double profitability) {
         this.cell = cell;
@@ -21,6 +23,13 @@ public class CellProfitability implements Comparable<CellProfitability> {
         this.emptyTaxis = emptyTaxis;
         this.medianProfit = medianProfit;
         this.profitability = profitability;
+    }
+
+    public CellProfitability(Cell cell, int id, int emptyTaxis, float profit) {
+        this.cell = cell;
+        this.id = id;
+        this.emptyTaxis = emptyTaxis;
+        this.medianProfitCell = new MedianOfStream<Float>(profit);
     }
 
     public Cell getCell() {
@@ -31,16 +40,40 @@ public class CellProfitability implements Comparable<CellProfitability> {
         return id;
     }
 
+    public void setId(int id) {
+        this.id = id;
+    }
+
     public int getEmptyTaxis() {
         return emptyTaxis;
+    }
+
+    public void setEmptyTaxis(int emptyTaxis) {
+        this.emptyTaxis = emptyTaxis;
     }
 
     public double getMedianProfit() {
         return medianProfit;
     }
 
+    public void setMedianProfit(double medianProfit) {
+        this.medianProfit = medianProfit;
+    }
+
+    public void setProfitability(double profitability) {
+        this.profitability = profitability;
+    }
+
     public double getProfitability() {
         return profitability;
+    }
+
+    public MedianOfStream<Float> getMedianProfitCell() {
+        return medianProfitCell;
+    }
+
+    public void setMedianProfitCell(MedianOfStream<Float> medianProfitCell) {
+        this.medianProfitCell = medianProfitCell;
     }
 
     @Override

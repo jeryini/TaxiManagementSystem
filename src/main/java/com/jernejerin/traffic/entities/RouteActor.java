@@ -69,7 +69,7 @@ public class RouteActor {
     // define Actors
 
     /**
-     * Inner node Actor that contains top routes.
+     * Inner node Actor that contains top route count.
      */
     public static class TopRouteNode extends AbstractActor {
         // ACTOR STATE
