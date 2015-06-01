@@ -1,11 +1,14 @@
 # Taxi management system
 A server side system for **reading taxi trips data** and distributing its processing. The following consecutive operations are executed by the system:
+
 1. receives trip as event
 2. checks for errors in received trip
 3. saves the trip into the database
 4. computes query 1 and query 2 and outputs changes into file
 
-The system is *horizontally and vertically scalable* and *resilient to partial outages*.
+The project is basically a solution of the [DEBS 2015 Grand Challenge](http://www.debs2015.org/call-grand-challenge.html). So for a complete understanding
+of the solution for query 1 and query 2 read the description on the provided link. The New York city taxi
+data was [made public by the Chris Wong](http://chriswhong.com/open-data/foil_nyc_taxi/). The system is *horizontally and vertically scalable* and *resilient to partial outages*.
 
 ## Purpose
 This project was done for a Master's degree at [Faculty of Computer and Information Science](http://www.fri.uni-lj.si/en/), [University of Ljubljana](http://www.uni-lj.si/eng/). We did a comparison between the following architectures:
