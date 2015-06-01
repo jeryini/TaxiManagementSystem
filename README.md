@@ -1,11 +1,19 @@
 # Taxi management system
-A server side system for **reading taxi data** and distributing its processing. The system reads taxi data, checks for correct data and saves it into the database. It also updates statistics. The system is *horizontally and vertically scalable* and *resilient to partial outages*.
+A server side system for **reading taxi trips data** and distributing its processing. The following consecutive operations are executed by the system:
+1. receives trip as event
+2. checks for errors in received trip
+3. saves the trip into the database
+4. computes query 1 and query 2 and outputs changes into file
+
+The system is *horizontally and vertically scalable* and *resilient to partial outages*.
 
 ## Purpose
-This project was done for a Master's degree at [Faculty of Computer and Information Science](http://www.fri.uni-lj.si/en/), [University of Ljubljana](http://www.uni-lj.si/eng/). We did a comparison between three different architectures:
-* EDA
-* SEDA
-* hypothetical ASEDA
+This project was done for a Master's degree at [Faculty of Computer and Information Science](http://www.fri.uni-lj.si/en/), [University of Ljubljana](http://www.uni-lj.si/eng/). We did a comparison between the following architectures:
+* EDA - event driven architecture
+* SEDA - staged event driven architecture
+* AEDA - actor based event driven architecture
+* hypothetical ASEDA - actor based staged event driven architecture
+* DASEDA - distributed actor based staged event driven architecture
 
 The system was designed and build as a Reactive Streams System providing asynchronous stream processing with non-blocking back pressure. We have extensively followed [Reactive Manifesto](http://www.reactivemanifesto.org/) as well as [Reactive Streams](http://www.reactive-streams.org/) initiative. The project builds on top of [Reactor framework](http://projectreactor.io/). The reason for following the reactive programming paradigm was, because we wanted to extend [SEDA architecture](http://www.eecs.harvard.edu/~mdw/proj/seda/) with Actor based model. SEDA already defines the importance of back pressure and scalability so the step toward Actor based model and Reactive Streams was a logical one.
 
@@ -27,10 +35,17 @@ All three different architectures are build on top of the Reactor library.
 API for parsing command line options.
 
 ## General solution
-TODO
+The main class from which all different types of Architecture extend is Architecture.java. The class is abstract and has 
+a single abstract method run() which all implementations that extend Architecture must implement. The solution contains a 
+short but inefficient EDAPrimer.java. It is an example of correct implementation for query 1 and query 2 and is used for 
+comparing the output with other implementations.
+
+### Testing
+The test cases define a check to see if the output from the different implementation for query 1 and query 2 are consistent.
+There is also a test case to check that multiple consecutive runs on the same object result in equal results.
 
 ### Running
-TODO
+
 
 ## TODO
 * Update README.md
