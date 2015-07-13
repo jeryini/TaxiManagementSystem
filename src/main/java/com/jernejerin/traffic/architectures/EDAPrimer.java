@@ -27,8 +27,6 @@ import java.util.stream.StreamSupport;
  */
 public class EDAPrimer extends Architecture {
     private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
-
-    // TODO (Jernej Jerin): Check if we could somehow get rid of the global state.
     private static int id = 0;
 
     public EDAPrimer(ArchitectureBuilder builder) {
@@ -54,6 +52,13 @@ public class EDAPrimer extends Architecture {
         edaPrimer.run();
     }
 
+    /**
+     * Implementation of basic EDA solution. As a side effect it generates two files,
+     * one file for each query output.
+     *
+     * @return execution time to compute the solution
+     * @throws InterruptedException
+     */
     public long run() throws InterruptedException {
         long startTime = System.currentTimeMillis();
 
@@ -69,15 +74,15 @@ public class EDAPrimer extends Architecture {
         ArrayDeque<Trip> tripProfits = new ArrayDeque<>();
         ArrayDeque<Trip> tripEmptyTaxis = new ArrayDeque<>();
 
+        // synchronization signal
         CountDownLatch completeSignal = new CountDownLatch(2);
-
 
         taxiStream.getTrips()
                 .map(t -> {
                     // create a tuple of string trip and current time for computing delay
                     // As this is our entry point it is appropriate to start the time here,
                     // before any parsing is being done. This also in record with the Grand
-                    // challenge recommendation
+                    // challenge recommendation.
                     return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
                 .observeComplete(v -> {
@@ -87,7 +92,7 @@ public class EDAPrimer extends Architecture {
                 })
                 // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
-                        // group by trip validation
+                // group by trip validation
                 .groupBy(t -> t != null)
                 .consume(tripValidStream -> {
                     // if trip is valid continue with operations on the trip
@@ -98,6 +103,8 @@ public class EDAPrimer extends Architecture {
                                     if (routeValidStream.key()) {
                                         routeValidStream
                                                 .consume(t -> {
+                                                    // send event to each query stream
+                                                    // here we are using declarative stream concurrency
                                                     taxiStream.query1.onNext(t);
                                                     taxiStream.query2.onNext(t);
                                                 });
@@ -140,6 +147,7 @@ public class EDAPrimer extends Architecture {
                             t.getTimestampReceived(), t);
                 })
                 .observeComplete(v -> {
+                    // synchronization signal for two query streams
                     completeSignal.countDown();
                 })
                 .consume(ct -> {
@@ -208,14 +216,26 @@ public class EDAPrimer extends Architecture {
         // wait for onComplete event
         completeSignal.await();
         id = 0;
+
+        // compute the time that was needed to get the solution
         return System.currentTimeMillis() - startTime;
     }
 
 
+    /**
+     * Computes a list of best routes from the passed list of trips.
+     *
+     * @param trips a list of trips that have completed in the last 30 minutes
+     * @return a list of route frequency, where each route contains a frequency. The list
+     * is ordered is descending order by the count attribute.
+     */
     private List<RouteCount> bestRoutes(Queue<Trip> trips) {
         // a priority queue for top 10 routes. Orders by natural number.
         BoundedPriorityQueue<RouteCount> top10 = new BoundedPriorityQueue<>(Comparator.<RouteCount>naturalOrder(), 10);
 
+        // creates a stream from a list of trips and groups them by route500. Then it maps
+        // each trip to RouteCount and reduces/combines the RouteCount according to the largest id
+        // of the trip
         Map<Route, RouteCount> routesCounted = trips.stream()
                 .collect(Collectors.groupingBy(Trip::getRoute500,
                                 Collectors.collectingAndThen(
@@ -225,17 +245,25 @@ public class EDAPrimer extends Architecture {
                         )
                 );
 
-        routesCounted.forEach((r, rc) -> {
-            top10.offer(rc);
-        });
-
+        // pass each RouteCount to the bounded priority queue.
+        routesCounted.forEach((r, rc) -> top10.offer(rc));
         List<RouteCount> top10SortedNew = new LinkedList<>(top10);
+
         // sort routes
         top10SortedNew.sort(Comparator.<RouteCount>reverseOrder());
-
         return top10SortedNew;
     }
 
+    /**
+     * Computes a list of the most profitable cells from the passed list of empty taxis and
+     * profit cells.
+     *
+     * @param tripEmptyTaxis The number of empty taxis in an area is the sum of taxis that had a drop-off location in
+     *                      that area less than 30 minutes ago and had no following pickup yet.
+     * @param tripProfits The profit that originates from an area is computed by calculating the median fare + tip for
+     *                    trips that started in the area and ended within the last 15 minutes.
+     * @return A list of most profitable cells ordered in descending order by the cell median profit.
+     */
     private List<CellProfitability> bestCells(ArrayDeque<Trip> tripEmptyTaxis, ArrayDeque<Trip> tripProfits) {
         // a priority queue for top 10 cells. Orders by natural number.
         BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
@@ -275,6 +303,7 @@ public class EDAPrimer extends Architecture {
                         endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
                         endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
             } else {
+                // end cell profit does not exist, just set median profit and profitability to 0
                 top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
             }
         });

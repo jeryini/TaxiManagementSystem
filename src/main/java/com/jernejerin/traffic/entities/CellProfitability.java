@@ -5,7 +5,10 @@ import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
 
 /**
- * Class that contains query 1 results.
+ * A value class that holds profitability of the cells.
+ *
+ * <b>
+ *     Note: this class has a natural ordering that is inconsistent with equals..
  *
  * @author Jernej Jerin
  */

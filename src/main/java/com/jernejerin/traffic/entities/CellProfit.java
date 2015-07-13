@@ -29,15 +29,28 @@ public class CellProfit {
         return medianProfit;
     }
 
+    /**
+     * A new cell profit from the trip.
+     *
+     * @param trip a trip from which to create a new cell profit
+     * @return a new cell profit
+     */
     public static CellProfit fromTrip(Trip trip) {
         return new CellProfit(trip.getId(), new MedianOfStream<>(trip.getFareAmount() +
                 trip.getTipAmount()));
     }
 
+    /**
+     * Combines the cell profits.
+     *
+     * @param cellProfit1 the first cell profit to combine
+     * @param cellProfit2 the second cell profit to combine
+     * @return a new combined cell profit
+     */
     public static CellProfit combine(CellProfit cellProfit1, CellProfit cellProfit2) {
         CellProfit recent = cellProfit1.id > cellProfit2.id ? cellProfit1 : cellProfit2;
 
-        // combine the median profits
+        // combine the median profits into cell profit 1 (it does not matter if we chose cell profit 1 or 2)
         cellProfit2.medianProfit.maxHeap.forEach(cellProfit1.medianProfit::addNumberToStream);
         cellProfit2.medianProfit.minHeap.forEach(cellProfit1.medianProfit::addNumberToStream);
 

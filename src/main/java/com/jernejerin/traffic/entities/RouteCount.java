@@ -43,10 +43,24 @@ public class RouteCount implements Comparable<RouteCount> {
         this.count = count;
     }
 
+    /**
+     * Maps from Trip to RouteCount, where we set the count to 1.
+     * @param trip
+     * @return
+     */
     public static RouteCount fromTrip(Trip trip) {
         return new RouteCount(trip.getRoute500(), trip.getId(), 1L);
     }
 
+    /**
+     * Combines the route count by the largest id and sums up the count.
+     * We want them by the largest id, as if two different routes have the
+     * same frequency, they have to be ordered by the most recent trip.
+     *
+     * @param routeCount1
+     * @param routeCount2
+     * @return
+     */
     public static RouteCount combine(RouteCount routeCount1, RouteCount routeCount2) {
         RouteCount recent = routeCount1.id > routeCount2.id ? routeCount1 : routeCount2;
         return new RouteCount(recent.route, recent.id, routeCount1.count + routeCount2.count);
