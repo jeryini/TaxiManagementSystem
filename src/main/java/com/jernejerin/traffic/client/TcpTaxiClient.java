@@ -1,7 +1,5 @@
 package com.jernejerin.traffic.client;
 
-import com.jernejerin.traffic.helper.TaxiStream;
-
 import org.apache.commons.cli.*;
 
 import reactor.Environment;

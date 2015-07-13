@@ -2,7 +2,7 @@ package com.jernejerin.traffic.architectures;
 
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
-import com.jernejerin.traffic.helper.TaxiStream;
+import com.jernejerin.traffic.client.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
 
@@ -18,12 +18,17 @@ import java.util.stream.StreamSupport;
 
 /**
  * <p>
- * An example of a possible implementation of event driven architecture - EDA.
+ * An example of a simple, i.e. basic implementation of event driven architecture - EDA.
+ * This solution represents the correct implementation for query 1 and query 2 and is
+ * therefore used as a basis for comparison of correct output of other solutions, such as
+ * SEDA, AEDA and ASEDA.
  *
  * @author Jernej Jerin
  */
 public class EDAPrimer extends Architecture {
     private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
+
+    // TODO (Jernej Jerin): Check if we could somehow get rid of the global state.
     private static int id = 0;
 
     public EDAPrimer(ArchitectureBuilder builder) {
@@ -32,7 +37,7 @@ public class EDAPrimer extends Architecture {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        LOGGER.log(Level.INFO, "Starting single threaded EDA 3 solution from thread = " + Thread.currentThread());
+        LOGGER.log(Level.INFO, "Starting single threaded EDA Primer solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
         ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +

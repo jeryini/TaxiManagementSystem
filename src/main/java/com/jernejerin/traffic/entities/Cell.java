@@ -83,6 +83,10 @@ public abstract class Cell {
                 latitude >= BOTTOM_RIGHT.getT1() && longitude <= BOTTOM_RIGHT.getT2();
     }
 
+    public abstract float toLatitude();
+
+    public abstract float toLongitude();
+
     @Override
     /**
      * Compute hash code by using Apache Commons Lang HashCodeBuilder.
@@ -110,10 +114,6 @@ public abstract class Cell {
                 .append(this.east, cell.east)
                 .isEquals();
     }
-
-    public abstract float toLatitude();
-
-    public abstract float toLongitude();
 
     @Override
     public String toString() {

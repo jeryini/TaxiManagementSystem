@@ -2,19 +2,14 @@ package com.jernejerin.traffic.architectures;
 
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
-import com.jernejerin.traffic.helper.TaxiStream;
+import com.jernejerin.traffic.client.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * <p>
@@ -92,6 +87,7 @@ public class EDA extends Architecture {
                                     if (routeValidStream.key()) {
                                         routeValidStream
                                                 .consume(t -> {
+                                                    // this is a transducer, which creates additional two streams
                                                     taxiStream.query1.onNext(t);
                                                     taxiStream.query2.onNext(t);
                                                 });

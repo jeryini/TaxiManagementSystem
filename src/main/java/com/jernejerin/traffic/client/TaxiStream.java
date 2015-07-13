@@ -1,4 +1,4 @@
-package com.jernejerin.traffic.helper;
+package com.jernejerin.traffic.client;
 
 import com.jernejerin.traffic.entities.Trip;
 import com.univocity.parsers.csv.CsvParser;
@@ -9,7 +9,6 @@ import reactor.rx.broadcast.Broadcaster;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UnsupportedEncodingException;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -58,6 +57,12 @@ public class TaxiStream {
         this.trips = trips;
     }
 
+    /**
+     * Read stream of taxi trip data from file
+     * and broadcast its value next.
+     *
+     * @throws InterruptedException
+     */
     public void readStream() throws InterruptedException {
         // setting up CSV parser
         CsvParser parser = setupParser();

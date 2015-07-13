@@ -2,18 +2,12 @@ package com.jernejerin.traffic.architectures;
 
 import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.Route;
-import com.jernejerin.traffic.helper.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
-import org.apache.commons.cli.*;
 import reactor.Environment;
 import reactor.core.DispatcherSupplier;
 import reactor.fn.tuple.Tuple;
-import reactor.io.codec.StandardCodecs;
-import reactor.io.net.NetStreams;
-import reactor.io.net.tcp.TcpServer;
 import reactor.rx.Streams;
 
-import java.io.File;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;

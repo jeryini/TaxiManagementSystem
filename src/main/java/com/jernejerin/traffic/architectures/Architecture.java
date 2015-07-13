@@ -1,14 +1,11 @@
 package com.jernejerin.traffic.architectures;
 
-import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.CellProfitability;
 import com.jernejerin.traffic.entities.RouteCount;
 import com.jernejerin.traffic.entities.Trip;
 import com.jernejerin.traffic.helper.PollingDriver;
-import com.jernejerin.traffic.helper.TaxiStream;
-import org.apache.commons.cli.*;
+import com.jernejerin.traffic.client.TaxiStream;
 import reactor.Environment;
-import reactor.fn.tuple.Tuple2;
 import reactor.io.codec.StandardCodecs;
 import reactor.io.net.NetStreams;
 import reactor.io.net.tcp.TcpServer;
