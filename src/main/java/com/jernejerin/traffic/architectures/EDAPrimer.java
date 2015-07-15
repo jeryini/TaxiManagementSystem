@@ -83,7 +83,9 @@ public class EDAPrimer extends Architecture {
                     // As this is our entry point it is appropriate to start the time here,
                     // before any parsing is being done. This also in record with the Grand
                     // challenge recommendation.
+                    taxiStream.getTrips().count();
                     return Tuple.of(t, System.currentTimeMillis(), id++);
+
                 })
                 .observeComplete(v -> {
                     // send complete events to each query
