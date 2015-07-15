@@ -6,11 +6,21 @@ import com.jernejerin.traffic.architectures.EDA;
 import com.jernejerin.traffic.architectures.EDAPrimer;
 import com.jernejerin.traffic.helper.MedianOfStream;
 import javafx.scene.shape.Arc;
+import org.jxls.area.Area;
+import org.jxls.builder.AreaBuilder;
+import org.jxls.builder.xls.XlsCommentAreaBuilder;
+import org.jxls.common.CellRef;
+import org.jxls.common.Context;
+import org.jxls.transform.Transformer;
+import org.jxls.util.TransformerFactory;
 import reactor.fn.tuple.Tuple;
 import reactor.fn.tuple.Tuple2;
 import reactor.fn.tuple.Tuple3;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -51,6 +61,21 @@ public class Evaluation {
             System.out.println(measurement.name);
             printResult(measurement);
         }
+
+        // generate Excel report
+        InputStream is = Evaluation.class.getResourceAsStream("/com/jernejerin/Measurements_template.xls");
+        OutputStream os = new FileOutputStream("output/reports/Measurements.xls");
+        Transformer transformer = TransformerFactory.createTransformer(is, os);
+        AreaBuilder areaBuilder = new XlsCommentAreaBuilder(transformer);
+        List<Area> xlsAreaList = areaBuilder.build();
+        Area xlsArea = xlsAreaList.get(0);
+        Context context = transformer.createInitialContext();
+        context.putVar("measurement", measurements.get(0));
+        context.putVar("runMeasurements", measurements.get(0).runMeasurements);
+        xlsArea.applyAt(new CellRef("Result!A1"), context);
+        transformer.write();
+        is.close();
+        os.close();
     }
 
     /**
