@@ -5,17 +5,19 @@ import com.jernejerin.traffic.architectures.ArchitectureBuilder;
 import com.jernejerin.traffic.architectures.EDA;
 import com.jernejerin.traffic.architectures.EDAPrimer;
 import com.jernejerin.traffic.helper.MedianOfStream;
+import com.jernejerin.traffic.helper.SimpleCellRefGenerator;
 import javafx.scene.shape.Arc;
 import org.jxls.area.Area;
+import org.jxls.area.XlsArea;
 import org.jxls.builder.AreaBuilder;
 import org.jxls.builder.xls.XlsCommentAreaBuilder;
+import org.jxls.command.Command;
+import org.jxls.command.EachCommand;
+import org.jxls.common.AreaRef;
 import org.jxls.common.CellRef;
 import org.jxls.common.Context;
 import org.jxls.transform.Transformer;
 import org.jxls.util.TransformerFactory;
-import reactor.fn.tuple.Tuple;
-import reactor.fn.tuple.Tuple2;
-import reactor.fn.tuple.Tuple3;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -23,7 +25,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -41,11 +42,11 @@ public class Evaluation {
 
         // a list of architectures to evaluate
         List<Architecture> architectures = new ArrayList<>();
-//        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
+        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
         architectures.add(new EDA(new ArchitectureBuilder()));
 
         // number of times to run the evaluation for each architecture
-        int numTimes = 1;
+        int numTimes = 2;
 
         // variable for storing measurements of the architecture
         List<Measurement> measurements = new ArrayList<>(architectures.size());
@@ -63,15 +64,38 @@ public class Evaluation {
         }
 
         // generate Excel report
-        InputStream is = Evaluation.class.getResourceAsStream("/com/jernejerin/Measurements_template.xls");
-        OutputStream os = new FileOutputStream("output/reports/Measurements.xls");
+        // first we need a template
+        InputStream is = Evaluation.class.getResourceAsStream("/com/jernejerin/Measurements_template.xlsx");
+
+        // write the generated report to reports folder
+        OutputStream os = new FileOutputStream("output/reports/Measurements.xlsx");
+
+        // create a transformer
         Transformer transformer = TransformerFactory.createTransformer(is, os);
-        AreaBuilder areaBuilder = new XlsCommentAreaBuilder(transformer);
-        List<Area> xlsAreaList = areaBuilder.build();
-        Area xlsArea = xlsAreaList.get(0);
+
+        // save the root area
+        XlsArea xlsArea = new XlsArea("Template!A1:Q12", transformer);
+        XlsArea measurementArea = new XlsArea("Template!A1:Q12", transformer);
+
+        // creating each command for measurements providing custom cell reference generator instance
+        EachCommand measurementEachCommand = new EachCommand("measurement", "measurements", measurementArea,
+                new SimpleCellRefGenerator());
+        XlsArea runMeasurementArea = new XlsArea("Template!A12:Q12", transformer);
+
+        // each command for run measurements
+        Command runMeasurementEachCommand = new EachCommand("runMeasurement", "measurement.runMeasurements",
+                runMeasurementArea);
+        measurementArea.addCommand(new AreaRef("Template!A12:Q12"), runMeasurementEachCommand);
+        xlsArea.addCommand(new AreaRef("Template!A1:Q12"), measurementEachCommand);
+
+        // get the context for binding variables with template placeholders
         Context context = transformer.createInitialContext();
-        context.putVar("measurement", measurements.get(0));
+
+        // bind variables
+        context.putVar("measurements", measurements);
         context.putVar("runMeasurements", measurements.get(0).runMeasurements);
+
+        // apply transformation to sheet named Result
         xlsArea.applyAt(new CellRef("Result!A1"), context);
         transformer.write();
         is.close();

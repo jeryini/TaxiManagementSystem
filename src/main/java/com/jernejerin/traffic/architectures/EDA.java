@@ -105,6 +105,7 @@ public class EDA extends Architecture {
                 });
         // query 1: Frequent routes
         taxiStream.query1
+//                .onOverflowBuffer()
                 .map(t -> {
                     // trips leaving the window
                     while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
