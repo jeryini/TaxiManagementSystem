@@ -6,11 +6,9 @@ import com.jernejerin.traffic.architectures.EDA;
 import com.jernejerin.traffic.architectures.EDAPrimer;
 import com.jernejerin.traffic.helper.MedianOfStream;
 import com.jernejerin.traffic.helper.SimpleCellRefGenerator;
-import javafx.scene.shape.Arc;
-import org.jxls.area.Area;
+import com.sun.tools.attach.VirtualMachine;
+import com.sun.tools.attach.VirtualMachineDescriptor;
 import org.jxls.area.XlsArea;
-import org.jxls.builder.AreaBuilder;
-import org.jxls.builder.xls.XlsCommentAreaBuilder;
 import org.jxls.command.Command;
 import org.jxls.command.EachCommand;
 import org.jxls.common.AreaRef;
@@ -18,6 +16,7 @@ import org.jxls.common.CellRef;
 import org.jxls.common.Context;
 import org.jxls.transform.Transformer;
 import org.jxls.util.TransformerFactory;
+import sun.tools.attach.HotSpotVirtualMachine;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -27,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Contains evaluation of different architectures. The evaluation is done on the
@@ -38,7 +38,30 @@ import java.util.List;
  * @author Jernej Jerin
  */
 public class Evaluation {
-    public static void main(String[] args) throws InterruptedException, IOException {
+    public static void main(String[] args) throws Exception {
+
+        // enumerate all the locally running Java processes and get the process that is running the Evaluation program
+        Optional<VirtualMachineDescriptor> evaluationProgram = VirtualMachine.list().stream().
+                filter(descriptor -> descriptor.displayName().contains("Evaluation")).findFirst();
+
+        if (!evaluationProgram.isPresent()) {
+            System.out.println("Virtual machine descriptor not present.");
+            System.exit(2);
+        }
+
+        // attach to the virtual machine given the pid from the descriptor
+        VirtualMachine vm = VirtualMachine.attach(evaluationProgram.get().id());
+        if (!(vm instanceof HotSpotVirtualMachine)) {
+            System.out.println("Only works on HotSpot!");
+            System.exit(3);
+        }
+
+        // to invoke diagnostic commands, we need to cast our VirtualMachine to a HotSpotVirtualMachine
+        HotSpotVirtualMachine hsvm = (HotSpotVirtualMachine) vm;
+
+        // TODO (Jernej Jerin): Execute executeJCmd method to start the Flight Recorder
+        // https://community.oracle.com/thread/3676275
+//        hsvm.executeJCmd("Thread.print");
 
         // a list of architectures to evaluate
         List<Architecture> architectures = new ArrayList<>();
@@ -131,6 +154,7 @@ public class Evaluation {
             architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + "_query1_" + i + ".txt");
             architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + "_query2_" + i + ".txt");
 
+            // TODO (Jernej Jerin): Trigger Java Mission Control Flight Recorder
             long duration = architecture.run();
 
             // query 1
@@ -147,8 +171,6 @@ public class Evaluation {
             medianDelayQuery1.addNumberToStream(averageDelayQuery1);
 //            medianDelayQuery2.addNumberToStream(averageDelayQuery2);
 
-
-//            results.add(i, Tuple.of(duration, averageDelayQuery1, 0d));
             results.add(new RunMeasurement(i, duration, new MaxMinAverageMeasurement<>
                     (averageDelayQuery1, minDelayQuery1, maxDelayQuery1), new MaxMinAverageMeasurement<>
                     (0d, 0l, 0l), new MaxMinAverageMeasurement<>
