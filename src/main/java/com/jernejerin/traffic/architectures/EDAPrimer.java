@@ -3,6 +3,7 @@ package com.jernejerin.traffic.architectures;
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.client.TaxiStream;
+import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
 import reactor.rx.Stream;
@@ -20,14 +21,16 @@ import java.util.stream.StreamSupport;
 /**
  * <p>
  * An example of a simple, i.e. basic implementation of event driven architecture - EDA.
- * This solution represents the correct implementation for query 1 and query 2 and is
+ * This solution represents the correct, i.e. a primer implementation for query 1 and query 2 and is
  * therefore used as a basis for comparison of correct output of other solutions, such as
- * SEDA, AEDA and ASEDA.
+ * EDA, SEDA, AEDA, ASEDA and DASEDA.
  *
  * @author Jernej Jerin
  */
 public class EDAPrimer extends Architecture {
     private final static Logger LOGGER = Logger.getLogger(EDAPrimer.class.getName());
+
+    // counter for received trip events
     private static int id = 0;
 
     public EDAPrimer(ArchitectureBuilder builder) {
@@ -39,8 +42,8 @@ public class EDAPrimer extends Architecture {
         LOGGER.log(Level.INFO, "Starting single threaded EDA Primer solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +
-                EDAPrimer.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/" +
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/query/" +
+                EDAPrimer.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/query/" +
                 EDAPrimer.class.getSimpleName() + "_query2.txt");
 
         // set host and port from command line options
@@ -48,6 +51,15 @@ public class EDAPrimer extends Architecture {
 
         // construct the EDA solution using the builder
         Architecture edaPrimer = new EDAPrimer(builder);
+
+        // Then we set up and register the PoolingDriver.
+        LOGGER.log(Level.INFO, "Registering pooling driver from thread = " + Thread.currentThread());
+        try {
+            PollingDriver.setupDriver("jdbc:mysql://" + edaPrimer.hostDB + ":" + edaPrimer.portDB + "/" +
+                    edaPrimer.schemaDB, edaPrimer.userDB, edaPrimer.passDB);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
         // run the solution
         edaPrimer.run();
@@ -78,22 +90,30 @@ public class EDAPrimer extends Architecture {
         // synchronization signal
         CountDownLatch completeSignal = new CountDownLatch(2);
 
+        // sharing an upstream pipeline and wiring up 2 downstream pipelines
         Stream<Trip> sharedTripsStream = taxiStream.getTrips()
-                .map(t -> {
-                    // create a tuple of string trip and current time for computing delay
-                    // As this is our entry point it is appropriate to start the time here,
-                    // before any parsing is being done. This also in record with the Grand
-                    // challenge recommendation
-                    return Tuple.of(t, System.currentTimeMillis(), id++);
-                })
+                // create a tuple of string trip, current time for computing delay
+                // and id of the event. As this is our entry point it is appropriate to
+                // start the time here, before any parsing is being done. This also in
+                // record with the Grand challenge recommendation
+                .map(t -> Tuple.of(t, System.currentTimeMillis(), id++))
                 // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                 // filter invalid data
                 .filter(t -> t != null & t.getRoute250() != null)
+                // insert record into DB
+                .map(t -> {
+                    TripOperations.insertTrip(t);
+                    return t;
+                })
+                // wiring up 2 downstream pipelines
                 .broadcast();
 
         // query 1: Frequent routes
         sharedTripsStream
+                // observe for onComplete event and count down synchronization signal for
+                // two query streams
+                .observeComplete(v -> completeSignal.countDown())
                 .map(t -> {
                     // trips leaving the window
                     while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
@@ -118,10 +138,6 @@ public class EDAPrimer extends Architecture {
                     return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);
                 })
-                .observeComplete(v -> {
-                    // synchronization signal for two query streams
-                    completeSignal.countDown();
-                })
                 .consume(ct -> {
                     if (!top10Routes.equals(ct.getT1())) {
                         top10Routes.clear();
@@ -130,8 +146,10 @@ public class EDAPrimer extends Architecture {
                     }
                 });
 
+
         // query 2: Profitable cells
         sharedTripsStream
+                .observeComplete(v -> completeSignal.countDown())
                 .map(t -> {
                     // events leaving window for empty taxis in the last 30 minutes
                     while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
@@ -173,7 +191,6 @@ public class EDAPrimer extends Architecture {
                     return Tuple.of(bestCells, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived());
                 })
-                .observeComplete(v -> completeSignal.countDown())
                 .consume(ct -> {
                     if (!top10Cells.equals(ct.getT1())) {
                         top10Cells.clear();
@@ -185,7 +202,7 @@ public class EDAPrimer extends Architecture {
         // read the stream from file: for local testing
         taxiStream.readStream();
 
-        // wait for onComplete event
+        // wait for onComplete event and then reset the counter
         completeSignal.await();
         id = 0;
 
@@ -285,9 +302,15 @@ public class EDAPrimer extends Architecture {
         top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
 
         return top10SortedNew;
-
     }
 
+    /**
+     * A predicate to return distinct values by key.
+     *
+     * @param keyExtractor
+     * @param <T>
+     * @return
+     */
     public static <T> Predicate<T> distinctByKey(Function<? super T,Object> keyExtractor) {
         Map<Object,Boolean> seen = new ConcurrentHashMap<>();
         return t -> seen.putIfAbsent(keyExtractor.apply(t), Boolean.TRUE) == null;

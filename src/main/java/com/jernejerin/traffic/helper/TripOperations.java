@@ -97,8 +97,8 @@ public class TripOperations {
      * @param trip trip to insert.
      */
     public static void insertTrip(Trip trip) {
-        LOGGER.log(Level.INFO, "Started inserting trip into DB for trip = " +
-                trip.toString() + " from thread = " + Thread.currentThread());
+//        LOGGER.log(Level.INFO, "Started inserting trip into DB for trip = " +
+//                trip.toString() + " from thread = " + Thread.currentThread());
         PreparedStatement insertTrip = null;
         Connection conn = null;
         try {
@@ -150,8 +150,8 @@ public class TripOperations {
             catch(Exception e) {
                 LOGGER.log(Level.SEVERE, "Problem with closing connection from thread = " + Thread.currentThread());
             }
-            LOGGER.log(Level.INFO, "Finished inserting ticket into DB for for ticket = " +
-                    trip + " from thread = " + Thread.currentThread());
+//            LOGGER.log(Level.INFO, "Finished inserting ticket into DB for for ticket = " +
+//                    trip + " from thread = " + Thread.currentThread());
         }
     }
 

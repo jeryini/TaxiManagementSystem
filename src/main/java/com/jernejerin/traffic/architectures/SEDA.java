@@ -37,10 +37,10 @@ public class SEDA extends Architecture {
     private static LinkedList<Cell> top10PreviousQuery2 = new LinkedList<>();
 
     /** The default number of threads for stage 1. */
-    private static int stage1T = 1;
+    private static int stage1T = 4;
 
     /** The default number of threads for stage 2. */
-    private static int stage2T = 1;
+    private static int stage2T = 4;
 
     static int id = 0;
 
