@@ -16,15 +16,15 @@ public class ArchitectureTest extends TestCase {
      */
     @Test
     public void testSerialRun() throws InterruptedException, IOException {
-        Architecture eda = new EDA(new ArchitectureBuilder().fileNameQuery1Output("output/" +
+        Architecture eda = new EDA(new ArchitectureBuilder().fileNameQuery1Output("output/query/" +
                 EDA.class.getSimpleName() + "_query1_1.txt"));
         eda.run();
 
-        eda.setFileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1_2.txt");
+        eda.setFileNameQuery1Output("output/query/" + EDA.class.getSimpleName() + "_query1_2.txt");
         eda.run();
 
-        BufferedReader edaBuffReader1 = new BufferedReader(new FileReader("output/" + EDA.class.getSimpleName() + "_query1_1.txt"));
-        BufferedReader edaBuffReader2 = new BufferedReader(new FileReader("output/" + EDA.class.getSimpleName() + "_query1_2.txt"));
+        BufferedReader edaBuffReader1 = new BufferedReader(new FileReader("output/query/" + EDA.class.getSimpleName() + "_query1_1.txt"));
+        BufferedReader edaBuffReader2 = new BufferedReader(new FileReader("output/query/" + EDA.class.getSimpleName() + "_query1_2.txt"));
 
         String expectedLine;
         while ((expectedLine = edaBuffReader1.readLine()) != null) {
@@ -45,13 +45,13 @@ public class ArchitectureTest extends TestCase {
      */
     @Test
     public void testRun() throws Exception {
-        Architecture eda1 = new EDAPrimer(new ArchitectureBuilder().
+        Architecture eda1 = new EDA(new ArchitectureBuilder().
 //                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
                 fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
                 fileNameQuery1Output("output/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
         eda1.run();
 
-        Architecture eda2 = new AEDA(new ArchitectureBuilder().
+        Architecture eda2 = new EDA(new ArchitectureBuilder().
 //                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
                 fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
                 fileNameQuery1Output("output/" + AEDA.class.getSimpleName() + "_query1.txt"));

@@ -5,6 +5,7 @@ import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.client.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
+import reactor.rx.Stream;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
@@ -31,8 +32,8 @@ public class EDA extends Architecture {
         LOGGER.log(Level.INFO, "Starting single threaded EDA 3 solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +
-                EDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/" +
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/query/" +
+                EDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/query/" +
                 EDA.class.getSimpleName() + "_query2.txt");
 
         // set host and port from command line options
@@ -58,10 +59,10 @@ public class EDA extends Architecture {
         final ArrayDeque<Trip> trips = new ArrayDeque<>();
         final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
 
+        // synchronization for on complete events
         CountDownLatch completeSignal = new CountDownLatch(2);
 
-
-        taxiStream.getTrips()
+        Stream<Trip> sharedTripsStream = taxiStream.getTrips()
                 .map(t -> {
                     // create a tuple of string trip and current time for computing delay
                     // As this is our entry point it is appropriate to start the time here,
@@ -69,43 +70,15 @@ public class EDA extends Architecture {
                     // challenge recommendation
                     return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
-                .observeComplete(v -> {
-                    // send complete events to each query
-                    taxiStream.query1.onComplete();
-                    taxiStream.query2.onComplete();
-                })
                         // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
-                        // group by trip validation
-                .groupBy(t -> t != null)
-                .consume(tripValidStream -> {
-                    // if trip is valid continue with operations on the trip
-                    if (tripValidStream.key()) {
-                        tripValidStream
-                                .groupBy(t -> t.getRoute250() != null)
-                                .consume(routeValidStream -> {
-                                    if (routeValidStream.key()) {
-                                        routeValidStream
-                                                .consume(t -> {
-                                                    // this is a transducer, which creates additional two streams
-                                                    taxiStream.query1.onNext(t);
-                                                    taxiStream.query2.onNext(t);
-                                                });
-                                    } else {
-                                        routeValidStream.consume(trip ->
-                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
-                                        );
-                                    }
-                                });
-                    } else {
-                        tripValidStream.consume(trip ->
-                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
-                        );
-                    }
-                });
+                        // filter invalid data
+                .filter(t -> t != null & t.getRoute250() != null)
+                // wiring up 2 downstream pipelines
+                .broadcast();
+
         // query 1: Frequent routes
-        taxiStream.query1
-//                .onOverflowBuffer()
+        sharedTripsStream
                 .map(t -> {
                     // trips leaving the window
                     while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
@@ -200,8 +173,7 @@ public class EDA extends Architecture {
                                 Collections.swap(top100Routes, j, k);
                             }
                         }
-                    }
-                    else {
+                    } else {
                         // check top 100 size
                         if (top100Routes.size() < 100) {
                             top100Routes.addLast(routeCount);
@@ -235,7 +207,7 @@ public class EDA extends Architecture {
                 });
 
         // query 2: Frequent routes
-        taxiStream.query2
+        sharedTripsStream
                 .observeComplete(v -> {
                     completeSignal.countDown();
                 })

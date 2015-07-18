@@ -3,7 +3,11 @@ package com.jernejerin.traffic.client;
 import com.jernejerin.traffic.entities.Trip;
 import com.univocity.parsers.csv.CsvParser;
 import com.univocity.parsers.csv.CsvParserSettings;
+import org.reactivestreams.Processor;
 import reactor.Environment;
+import reactor.core.processor.RingBufferProcessor;
+import reactor.rx.Stream;
+import reactor.rx.Streams;
 import reactor.rx.broadcast.Broadcaster;
 
 import java.io.InputStreamReader;
@@ -21,24 +25,20 @@ import java.util.logging.Logger;
 public class TaxiStream {
     private final static Logger LOGGER = Logger.getLogger(TaxiStream.class.getName());
     private String fileName;
-    // we use a hot stream Observable as we have a unbounded stream of data incoming.
-    private Broadcaster<String> trips;
 
-    // separate streams for each query
-    public Broadcaster<Trip> query1;
-    public Broadcaster<Trip> query2;
+    // for asynchronous broadcasting the Processor is the recommended way
+    // instead of using the Broadcaster
+    private Processor<String, String> tripsProcessor;
+    private Stream<String> trips;
 
     public TaxiStream(String fileName) {
         this.fileName = fileName;
-        // create Observable
-        this.trips = Broadcaster.create(Environment.get());
-        this.query1 = Broadcaster.create(Environment.get());
-        this.query2 = Broadcaster.create(Environment.get());
 
-        // dispatch onto a new dispatcher that is suitable for streams
-        this.trips.dispatchOn(Environment.cachedDispatcher());
-        this.query1.dispatchOn(Environment.cachedDispatcher());
-        this.query2.dispatchOn(Environment.cachedDispatcher());
+        // create a Processor with an internal RingBuffer capacity of 32 slots
+        this.tripsProcessor = RingBufferProcessor.create("trips", 32);
+
+        // create a Reactor Stream from this Reactive Streams Processor
+        this.trips = Streams.wrap(this.tripsProcessor);
     }
 
     public String getFileName() {
@@ -49,7 +49,7 @@ public class TaxiStream {
         this.fileName = fileName;
     }
 
-    public Broadcaster<String> getTrips() {
+    public Stream<String> getTrips() {
         return trips;
     }
 
@@ -77,11 +77,11 @@ public class TaxiStream {
             String trip = String.join(",", row);
 
             // sink values to trips broadcaster
-            this.trips.onNext(trip);
+            this.tripsProcessor.onNext(trip);
         }
         // close the channel as we are finished streaming data
         // this sends a complete signal which we can in turn observe
-        this.trips.onComplete();
+        this.tripsProcessor.onComplete();
 
         // finished parsing all the data from the csv file
         parser.stopParsing();

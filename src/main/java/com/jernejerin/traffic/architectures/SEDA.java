@@ -1,14 +1,18 @@
 package com.jernejerin.traffic.architectures;
 
+import com.jernejerin.traffic.client.TaxiStream;
 import com.jernejerin.traffic.entities.Cell;
 import com.jernejerin.traffic.entities.Route;
+import com.jernejerin.traffic.entities.Trip;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.Environment;
 import reactor.core.DispatcherSupplier;
 import reactor.fn.tuple.Tuple;
+import reactor.rx.Stream;
 import reactor.rx.Streams;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -30,7 +34,7 @@ public class SEDA extends Architecture {
     private static LinkedList<Cell> top10PreviousQuery2 = new LinkedList<>();
 
     /** The default number of threads for stage 1. */
-    private static int stage1T = 20;
+    private static int stage1T = 10;
 
     /** The default number of threads for stage 2. */
     private static int stage2T = 20;
@@ -54,7 +58,9 @@ public class SEDA extends Architecture {
         LOGGER.log(Level.INFO, "Starting SEDA solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder();
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/query/" +
+                SEDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/query/" +
+                SEDA.class.getSimpleName() + "_query2.txt");
 
         // set host and port from command line options
         builder.setOptionsCmd(args);
@@ -67,67 +73,43 @@ public class SEDA extends Architecture {
     }
 
     public long run() throws InterruptedException {
-        // consumer for TCP server
-        this.serverTCP.start(ch -> {
-            ch.log("conn").consume(trip -> {
-                LOGGER.log(Level.INFO, "TCP server receiving trip " +
-                        trip + " from thread = " + Thread.currentThread());
-                // dispatch event to a broadcaster pipeline
-                this.taxiStream.getTrips().onNext(trip);
-                LOGGER.log(Level.INFO, "TCP server send ticket to streaming pipeline for ticket = " +
-                        trip + " from thread = " + Thread.currentThread());
-            });
-            return Streams.never();
-        }).await();
+        long startTime = System.currentTimeMillis();
+
+        // create a taxi service
+        this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
+
+        // synchronization signal
+        CountDownLatch completeSignal = new CountDownLatch(1);
 
         // processing through stages of streams, where each stage has a separate thread pool
         // for processing streams. We basically fork the stream in each stage to number of streams,
         // which equals the number of threads in pool
-        taxiStream.getTrips()
-            // dispatcher for funneling/joining result back to single thread
-            .dispatchOn(Environment.sharedDispatcher())
-            .map(t -> {
-                // create a tuple of string trip and current time for computing delay
-                // As this is our entry point it is appropriate to start the time here,
-                // before any parsing is being done. This also in record with the Grand
-                // challenge recommendation
-                //                LOGGER.log(Level.INFO, "Distributing for ticket = " +
-//                        t + " from thread = " + Thread.currentThread());
-                return Tuple.of(t, System.currentTimeMillis(), id++);
-            })
+        Stream<Trip> sharedTripsStream = taxiStream.getTrips()
+            .map(t -> Tuple.of(t, System.currentTimeMillis(), id++))
             // parallelize stream tasks to separate streams for stage 1 - PARSING AND SAVING DATA
             .partition(stage1T)
             // we receive streams grouped by accordingly to the positive modulo of the
             // current hashcode with respect to the number of buckets specified
             .flatMap(stream -> stream
-                // dispatch on separate stream
+                // use dispatcher pool to assign to the newly generated streams
                 .dispatchOn(supplierStage1.get())
                 // stage 1 is for validating ticket structure and saving it into the DB
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
-                // group by trip validation
-                .groupBy(t -> t != null)
-                .map(tripValidStream -> {
-                    // if trip is valid continue with operations on the trip
-                    // The insert trip operation falls under the STAGE 1.
-                    if (tripValidStream.key()) {
-                        return tripValidStream
-                                .map(t -> {
-                                    // save ticket
-//                            TripOperations.insertTrip(t);
-                                    return t;
-                                });
-                    } else {
-                        tripValidStream.consume(trip ->
-                            LOGGER.log(Level.WARNING, "Invalid trip passed in!")
-                        );
-                    }
-                    return Streams.<Object>empty();
-                })
+                // filter invalid data
+                .filter(t -> t != null & t.getRoute250() != null)
+//                            .log("filter")
+//                .map(tripValid -> {
+//                    // if trip is valid continue with operations on the trip
+//                    // The insert trip operation falls under the STAGE 1.
+//                    return tripValid;
+//                })
             )
+            // dispatcher for funneling/joining result back to single thread
             .dispatchOn(Environment.sharedDispatcher())
-            .consume(t -> {
-                t.consume();
-            });
+            .observeComplete(v -> completeSignal.countDown())
+            .broadcast();
+
+//        sharedTripsStream
 
                     // partition stream for stage 2
 //                        .partition(stage2T)
@@ -147,10 +129,11 @@ public class SEDA extends Architecture {
         // read the stream from file: for local testing
         taxiStream.readStream();
 
-        // run the server forever
-        // TODO(Jernej Jerin): Is there a better way to do this?
-        Thread.sleep(Long.MAX_VALUE);
+        // wait for onComplete event
+        completeSignal.await();
+        id = 0;
 
-        return 0;
+        // compute the time that was needed to get the solution
+        return System.currentTimeMillis() - startTime;
     }
 }

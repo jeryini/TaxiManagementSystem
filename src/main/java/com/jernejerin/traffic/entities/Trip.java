@@ -250,4 +250,14 @@ public class Trip {
     public void setRoute250(Route route250) {
         this.route250 = route250;
     }
+
+    public String toString() {
+        return this.id + ", " + this.medallion + ", " + this.hackLicense + ", " +
+                this.pickupDatetime + ", " + this.dropOffDatetime + ", " + this.pickupTimestamp + ", "
+                + this.dropOffTimestamp + ", " + this.tripTime + ", " + this.tripDistance + ", " + this.pickupLongitude
+                + ", " + this.pickupLatitude + ", " + this.dropOffLongitude + ", " + this.dropOffLatitude + ", " +
+                this.paymentType + ", " + this.fareAmount + ", " + this.surcharge + ", " + this.mtaTax + ", " +
+                this.tipAmount + ", " + this.tollsAmount + ", " + this.totalAmount + ", " + this.timestampReceived +
+                ", " + this.route500 + ", " + this.route250;
+    }
 }

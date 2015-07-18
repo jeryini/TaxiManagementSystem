@@ -8,6 +8,7 @@ import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.client.TaxiStream;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
+import reactor.rx.Stream;
 import scala.concurrent.duration.Duration;
 
 import java.util.*;
@@ -83,7 +84,7 @@ public class AEDA extends Architecture {
 
         CountDownLatch completeSignal = new CountDownLatch(2);
 
-        taxiStream.getTrips()
+        Stream<Trip> sharedTripsStream = taxiStream.getTrips()
                 .map(t -> {
                     // create a tuple of string trip and current time for computing delay
                     // As this is our entry point it is appropriate to start the time here,
@@ -91,41 +92,14 @@ public class AEDA extends Architecture {
                     // challenge recommendation
                     return Tuple.of(t, System.currentTimeMillis(), id++);
                 })
-                .observeComplete(v -> {
-                    // send complete events to each query
-                    taxiStream.query1.onComplete();
-                    taxiStream.query2.onComplete();
-                })
                         // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
-                        // group by trip validation
-                .groupBy(t -> t != null)
-                .consume(tripValidStream -> {
-                    // if trip is valid continue with operations on the trip
-                    if (tripValidStream.key()) {
-                        tripValidStream
-                                .groupBy(t -> t.getRoute250() != null)
-                                .consume(routeValidStream -> {
-                                    if (routeValidStream.key()) {
-                                        routeValidStream
-                                                .consume(t -> {
-                                                    taxiStream.query1.onNext(t);
-                                                    taxiStream.query2.onNext(t);
-                                                });
-                                    } else {
-                                        routeValidStream.consume(trip ->
-                                                        LOGGER.log(Level.WARNING, "Route is not valid for trip!")
-                                        );
-                                    }
-                                });
-                    } else {
-                        tripValidStream.consume(trip ->
-                                        LOGGER.log(Level.WARNING, "Invalid trip passed in!")
-                        );
-                    }
-                });
+                        // filter invalid data
+                .filter(t -> t != null & t.getRoute250() != null)
+                .broadcast();
+
         // query 1: Frequent routes
-        taxiStream.query1
+        sharedTripsStream
                 .map(t -> {
                     // trips leaving the window
                     while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
@@ -180,7 +154,7 @@ public class AEDA extends Architecture {
                 });
 
         // query 2: Frequent routes
-        taxiStream.query2
+        sharedTripsStream
                 .map(t -> {
                     // events leaving window for empty taxis in the last 30 minutes
                     while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <

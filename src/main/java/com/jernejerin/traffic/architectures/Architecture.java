@@ -186,6 +186,17 @@ public abstract class Architecture {
         }
     }
 
+    public void writeTrips(Trip trip) {
+        try (FileOutputStream fop = new FileOutputStream(this.fileQuery1, true)) {
+            // write to file
+            fop.write((trip.toString() + "\n").getBytes());
+            fop.flush();
+            fop.close();
+        } catch (IOException ex) {
+            LOGGER.log(Level.SEVERE, ex.getMessage());
+        }
+    }
+
     /**
      * Method to run implemented architecture. The method should return the
      * time to run the solution in milliseconds.
