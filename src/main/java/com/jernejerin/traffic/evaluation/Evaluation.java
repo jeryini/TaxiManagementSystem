@@ -62,10 +62,9 @@ public class Evaluation {
 
         // a list of architectures to evaluate
         List<Architecture> architectures = new ArrayList<>();
-        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
-        architectures.add(new EDAPrimer2(new ArchitectureBuilder()));
+        architectures.add(new SEDA(new ArchitectureBuilder()));
+//        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
 //        architectures.add(new EDA(new ArchitectureBuilder()));
-//        architectures.add(new EDA2(new ArchitectureBuilder()));
 
         // number of times to run the evaluation for each architecture
         int numTimes = 5;

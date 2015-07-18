@@ -103,32 +103,34 @@ public class TripOperations {
         Connection conn = null;
         try {
             // first we need to get connection from connection pool
-            conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:example");
+            conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:taxi");
 
             // setting up prepared statement
-            insertTrip = conn.prepareStatement("insert into trip (medallion, hack_license, pickup_datetime, " +
+            insertTrip = conn.prepareStatement("insert into trip (eventId, medallion, hack_license, pickup_datetime, " +
                     "dropoff_datetime, trip_time, trip_distance, pickup_longitude, pickup_latitude, dropoff_longitude, " +
                     "dropoff_latitude, payment_type, fare_amount, surcharge, mta_tax, tip_amount, tolls_amount, " +
-                    "total_amount, timestampReceived) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                    "total_amount, timestampReceived) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
 
-            insertTrip.setString(1, trip.getMedallion());
-            insertTrip.setString(2, trip.getHackLicense());
-            insertTrip.setTimestamp(3, new Timestamp(trip.getPickupDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
-            insertTrip.setTimestamp(4, new Timestamp(trip.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
-            insertTrip.setInt(5, trip.getTripTime());
-            insertTrip.setDouble(6, trip.getTripDistance());
-            insertTrip.setDouble(7, trip.getPickupLongitude());
-            insertTrip.setDouble(8, trip.getPickupLatitude());
-            insertTrip.setDouble(9, trip.getDropOffLongitude());
-            insertTrip.setDouble(10, trip.getDropOffLatitude());
-            insertTrip.setString(11, trip.getPaymentType().name());
-            insertTrip.setDouble(12, trip.getFareAmount());
-            insertTrip.setDouble(13, trip.getSurcharge());
-            insertTrip.setDouble(14, trip.getMtaTax());
-            insertTrip.setDouble(15, trip.getTipAmount());
-            insertTrip.setDouble(16, trip.getTollsAmount());
-            insertTrip.setDouble(17, trip.getTotalAmount());
-            insertTrip.setLong(18, trip.getTimestampReceived());
+
+            insertTrip.setInt(1, trip.getId());
+            insertTrip.setString(2, trip.getMedallion());
+            insertTrip.setString(3, trip.getHackLicense());
+            insertTrip.setTimestamp(4, new Timestamp(trip.getPickupDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
+            insertTrip.setTimestamp(5, new Timestamp(trip.getDropOffDatetime().toEpochSecond(ZoneOffset.UTC) * 1000));
+            insertTrip.setInt(6, trip.getTripTime());
+            insertTrip.setDouble(7, trip.getTripDistance());
+            insertTrip.setDouble(8, trip.getPickupLongitude());
+            insertTrip.setDouble(9, trip.getPickupLatitude());
+            insertTrip.setDouble(10, trip.getDropOffLongitude());
+            insertTrip.setDouble(11, trip.getDropOffLatitude());
+            insertTrip.setString(12, trip.getPaymentType() != null ? trip.getPaymentType().name() : null);
+            insertTrip.setDouble(13, trip.getFareAmount());
+            insertTrip.setDouble(14, trip.getSurcharge());
+            insertTrip.setDouble(15, trip.getMtaTax());
+            insertTrip.setDouble(16, trip.getTipAmount());
+            insertTrip.setDouble(17, trip.getTollsAmount());
+            insertTrip.setDouble(18, trip.getTotalAmount());
+            insertTrip.setLong(19, trip.getTimestampReceived());
 
             insertTrip.execute();
         } catch (SQLException e) {
