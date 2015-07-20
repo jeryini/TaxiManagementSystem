@@ -9,8 +9,8 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
  * @author Jernej Jerin
  */
 public class EmptyTaxisCount {
-    private final int id;
-    private final int count;
+    private int id;
+    private int count;
 
     public EmptyTaxisCount(int id, int count) {
         this.id = id;
@@ -23,6 +23,13 @@ public class EmptyTaxisCount {
 
     public int getCount() {
         return count;
+    }
+
+    public void setCount(int count) {
+        this.count = count;
+    }
+    public void setId(int id) {
+        this.id = id;
     }
 
     /**

@@ -3,6 +3,7 @@ package com.jernejerin.traffic.architectures;
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.client.TaxiStream;
+import com.jernejerin.traffic.helper.MedianOfStream;
 import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
@@ -74,10 +75,20 @@ public class EDA extends Architecture {
 
         // current top N sorted
         final LinkedList<RouteCount> topNRoutes = new LinkedList<>();
+        final LinkedList<CellProfitability> topNCellProfitability = new LinkedList<>();
+        final List<CellProfitability> top10Cells = new LinkedList<>();
 
         // time windows
         final ArrayDeque<Trip> trips = new ArrayDeque<>();
+        ArrayDeque<Trip> tripProfits = new ArrayDeque<>();
+        ArrayDeque<Trip> tripEmptyTaxis = new ArrayDeque<>();
+
+        // key value storage
         final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
+        final LinkedHashMap<Cell, EmptyTaxisCount> emptyTaxis = new LinkedHashMap<>(100000);
+        final LinkedHashMap<Cell, CellProfit> cellProfits = new LinkedHashMap<>(100000);
+
+
 
         CountDownLatch completeSignal = new CountDownLatch(2);
 
@@ -218,9 +229,152 @@ public class EDA extends Architecture {
                     }
                 });
 
-        // query 2: Frequent routes
+        // query 2: Profitable cells
         sharedTripsStream
                 .observeComplete(v -> completeSignal.countDown())
+                .map(t -> {
+                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
+                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+                        // a priority queue for top 10 cells. Orders by natural number.
+                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+
+                        Trip trip = tripEmptyTaxis.poll();
+
+                        // update the empty taxis count for the end cell of the trip, leaving the window
+                        EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getEndCell());
+                        emptyTaxisCount.setCount(emptyTaxisCount.getCount() - 1);
+
+//                        int i = -1;
+//                        for (int j = 0; j < topNCellProfitability.size(); j++) {
+//                            if (topNCellProfitability.get(j).getCell().equals(trip.getRoute250().getEndCell())) {
+//                                i = j;
+//                                break;
+//                            }
+//                        }
+
+                        // if count is 0 then remove the empty taxis to avoid unnecessary iteration
+                        if (emptyTaxisCount.getCount() == 0) {
+                            emptyTaxis.remove(emptyTaxisCount);
+
+                            // also if it exists in topN profitable cells, remove it because the cells
+                            // with 0 empty taxis should not be taken into account
+//                            if (i != -1) {
+//                                topNCellProfitability.remove(i);
+//
+//                                // we need to resort all profitable cells
+//                            }
+                        } else {
+                            emptyTaxis.put(trip.getRoute250().getEndCell(), emptyTaxisCount);
+
+                            // if it exists in topN profitable cells, then we need to check it its profitability
+                            // has decreased so much that the next profitable cell in line will be greater
+                        }
+
+                        // recompute all profitable cells
+                        // only consider those cells that have empty taxis
+                        emptyTaxis.forEach((ec, etc) -> {
+                            // get the profit for current end cell
+                            CellProfit endCellProfit = cellProfits.get(ec);
+                            if (endCellProfit != null) {
+                                top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+                                        endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                        endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+                            } else {
+                                // end cell profit does not exist, just set median profit and profitability to 0
+                                top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                            }
+                        });
+
+                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
+                        // sort routes
+                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+
+                        // if there is change in top 10, write it
+                        if (!top10Cells.equals(top10SortedNew)) {
+                            top10Cells.clear();
+                            top10Cells.addAll(top10SortedNew);
+                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
+                                    trip.getDropOffDatetime().plusMinutes(30),
+                                    t.getTimestampReceived());
+                        }
+
+                    }
+                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
+                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
+                        // a priority queue for top 10 cells. Orders by natural number.
+                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+
+                        Trip trip = tripProfits.poll();
+
+                        // update the empty taxis count for the end cell of the trip, leaving the window
+                        CellProfit cellProfit = cellProfits.get(trip.getRoute250().getStartCell());
+                        cellProfit.getMedianProfit().removeNumberFromStream(trip.getFareAmount() + trip.getTipAmount());
+
+                        // if there is no profit on cell, then remove it
+                        if (cellProfit.getMedianProfit().numOfElements == 0) {
+                            cellProfits.remove(cellProfit);
+                        } else {
+                            cellProfits.put(trip.getRoute250().getStartCell(), cellProfit);
+                        }
+
+                        // recompute all profitable cells
+                        // only consider those cells that have empty taxis
+                        emptyTaxis.forEach((ec, etc) -> {
+                            // get the profit for current end cell
+                            CellProfit endCellProfit = cellProfits.get(ec);
+                            if (endCellProfit != null) {
+                                top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+                                        endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                        endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+                            } else {
+                                // end cell profit does not exist, just set median profit and profitability to 0
+                                top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                            }
+                        });
+
+                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
+                        // sort routes
+                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+
+                        // if there is change in top 10, write it
+                        if (!top10Cells.equals(top10SortedNew)) {
+                            top10Cells.clear();
+                            top10Cells.addAll(top10SortedNew);
+                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
+                                    trip.getDropOffDatetime().plusMinutes(30),
+                                    t.getTimestampReceived());
+                        }
+                    }
+
+                    // store trip in both windows
+                    tripEmptyTaxis.add(t);
+                    tripProfits.add(t);
+
+                    // update map for empty taxi count
+                    EmptyTaxisCount emptyTaxisCount = emptyTaxis.getOrDefault(t.getRoute250().getEndCell(),
+                            new EmptyTaxisCount(t.getId(), 0));
+                    emptyTaxisCount.setCount(emptyTaxisCount.getCount() + 1);
+                    emptyTaxisCount.setId(t.getId());
+                    emptyTaxis.put(t.getRoute250().getEndCell(), emptyTaxisCount);
+
+                    // update map for cell profits
+                    CellProfit cellProfit = cellProfits.getOrDefault(t.getRoute250().getStartCell(),
+                            new CellProfit(t.getId(), new MedianOfStream<Float>()));
+                    cellProfit.getMedianProfit().addNumberToStream(t.getFareAmount() + t.getTipAmount());
+                    cellProfit.setId(t.getId());
+                    cellProfits.put(t.getRoute250().getStartCell(), cellProfit);
+
+                    // update the profit and trip id for the cell profitability of the incoming trip
+                    // if the cell profitability does not yet exist, create a new one
+                    // TODO (Jernej Jerin): How do we store cell profitability?
+//                    CellProfitability cellProfitability = routesCount.getOrDefault(t.getRoute500(),
+//                            new RouteCount(t.getRoute500(), t.getId(), 0));
+//                    routeCount.setCount(routeCount.getCount() + 1);
+//                    routeCount.setId(t.getId());
+//                    routesCount.put(t.getRoute500(), routeCount);
+
+                    return t;
+                })
                 .consume();
 
         // read the stream from file: for local testing

@@ -13,7 +13,7 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
  * @author Jernej Jerin
  */
 public class CellProfit {
-    private final int id;
+    private int id;
     private final MedianOfStream<Float> medianProfit;
 
     public CellProfit(int id, MedianOfStream<Float> medianProfit) {
@@ -24,6 +24,8 @@ public class CellProfit {
     public int getId() {
         return id;
     }
+
+    public void setId(int id) { this.id = id; }
 
     public MedianOfStream<Float> getMedianProfit() {
         return medianProfit;
