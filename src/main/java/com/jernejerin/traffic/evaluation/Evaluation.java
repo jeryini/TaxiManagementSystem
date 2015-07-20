@@ -62,7 +62,10 @@ public class Evaluation {
 
         // a list of architectures to evaluate
         List<Architecture> architectures = new ArrayList<>();
-        architectures.add(new SEDA(new ArchitectureBuilder()));
+        for (int i = 10; i <= 200; i+= 10) {
+            architectures.add(new EDA(new ArchitectureBuilder(), i));
+        }
+//        architectures.add(new SEDA(new ArchitectureBuilder()));
 //        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
 //        architectures.add(new EDA(new ArchitectureBuilder()));
 
@@ -72,9 +75,12 @@ public class Evaluation {
         // variable for storing measurements of the architecture
         List<Measurement> measurements = new ArrayList<>(architectures.size());
 
+        int id = 10;
         // run each architecture, which generates output in diagnostics, query and reports
         for (Architecture architecture : architectures) {
-            Measurement measurement = evaluate(architecture, numTimes);
+            Measurement measurement = evaluate(architecture, numTimes, id);
+            measurement.name = "EDA" + id;
+            id += 10;
             measurements.add(measurement);
         }
 
@@ -135,7 +141,7 @@ public class Evaluation {
      * @throws IOException
      */
     public static Measurement evaluate(Architecture architecture,
-            int numTimes) throws InterruptedException, IOException {
+            int numTimes, int id) throws InterruptedException, IOException {
         MedianOfStream<Long> medianDuration = new MedianOfStream<>();
         MedianOfStream<Double> medianDelayQuery1 = new MedianOfStream<>();
         MedianOfStream<Double> medianDelayQuery2 = new MedianOfStream<>();
@@ -144,13 +150,13 @@ public class Evaluation {
         List<RunMeasurement> results = new ArrayList<>(numTimes);
 
         //  run once before taking measurements to avoid taking into account cache misses
-        architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + "_query1_cache.txt");
-        architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + "_query2_cache.txt");
+        architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query1_cache.txt");
+        architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query2_cache.txt");
         architecture.run();
 
         for (int i = 0; i < numTimes; i++) {
-            architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + "_query1_" + i + ".txt");
-            architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + "_query2_" + i + ".txt");
+            architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query1_" + i + ".txt");
+            architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query2_" + i + ".txt");
 
             // TODO (Jernej Jerin): Trigger Java Mission Control Flight Recorder
             long duration = architecture.run();

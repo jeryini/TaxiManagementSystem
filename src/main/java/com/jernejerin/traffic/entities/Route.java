@@ -21,7 +21,7 @@ public class Route {
     public Route(Cell startCell, Cell endCell) {
         this.startCell = startCell;
         this.endCell = endCell;
-        // convert from 300-base system to decimal system
+        // convert from 300-base system to decimal system to get a truly unique id
         this.id = startCell.getEast() * 300L * 300L * 300L + startCell.getSouth() * 300L * 300L +
                 endCell.getEast() * 300L + endCell.getSouth();
     }

@@ -3,6 +3,7 @@ package com.jernejerin.traffic.architectures;
 import com.aliasi.util.BoundedPriorityQueue;
 import com.jernejerin.traffic.entities.*;
 import com.jernejerin.traffic.client.TaxiStream;
+import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.TripOperations;
 import reactor.fn.tuple.Tuple;
 import reactor.rx.Stream;
@@ -23,9 +24,20 @@ public class EDA extends Architecture {
     private final static Logger LOGGER = Logger.getLogger(EDA.class.getName());
     private static int id = 0;
 
+    // controls the size of the list to store largest Routes
+    // TODO (Jernej Jerin): From empirical testing it seems that
+    // TODO (Jernej Jerin): the best n is at value 30.
+    private int n = 100;
+
     public EDA(ArchitectureBuilder builder) {
         // call super constructor to initialize fields from builder
         super(builder);
+    }
+
+    public EDA(ArchitectureBuilder builder, int n) {
+        // call super constructor to initialize fields from builder
+        super(builder);
+        this.n = n;
     }
 
     public static void main(String[] args) throws InterruptedException {
@@ -47,38 +59,41 @@ public class EDA extends Architecture {
     }
 
     public long run() throws InterruptedException {
+        LOGGER.log(Level.INFO, "Registering pooling driver from thread = " + Thread.currentThread());
+        try {
+            PollingDriver.setupDriver("jdbc:mysql://" + this.hostDB + ":" + this.portDB + "/" +
+                    this.schemaDB, this.userDB, this.passDB);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         long startTime = System.currentTimeMillis();
 
         // create a taxi service
         this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
 
-        // current top 100 sorted
-        final LinkedList<RouteCount> top100Routes = new LinkedList<>();
+        // current top N sorted
+        final LinkedList<RouteCount> topNRoutes = new LinkedList<>();
 
         // time windows
         final ArrayDeque<Trip> trips = new ArrayDeque<>();
         final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
 
-        // synchronization for on complete events
         CountDownLatch completeSignal = new CountDownLatch(2);
 
         Stream<Trip> sharedTripsStream = taxiStream.getTrips()
-                .map(t -> {
-                    // create a tuple of string trip and current time for computing delay
-                    // As this is our entry point it is appropriate to start the time here,
-                    // before any parsing is being done. This also in record with the Grand
-                    // challenge recommendation
-                    return Tuple.of(t, System.currentTimeMillis(), id++);
-                })
-                        // parsing and validating trip structure
+                .map(t -> Tuple.of(t, System.currentTimeMillis(), id++))
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
-                        // filter invalid data
-                .filter(t -> t != null & t.getRoute250() != null)
-                // wiring up 2 downstream pipelines
+                .filter(t -> t != null && t.getRoute250() != null)
+//                .map(t -> {
+//                    TripOperations.insertTrip(t);
+//                    return t;
+//                })
                 .broadcast();
 
         // query 1: Frequent routes
         sharedTripsStream
+                .observeComplete(v -> completeSignal.countDown())
                 .map(t -> {
                     // trips leaving the window
                     while (trips.peek() != null && trips.peek().getDropOffTimestamp() < t.getDropOffTimestamp()
@@ -96,50 +111,50 @@ public class EDA extends Architecture {
                         else
                             routesCount.put(trip.getRoute500(), routeCount);
 
-                        // if route is in top 100, then resort the top 100
-                        // if it is not in top 100, then we do not have to do
+                        // if route is in top N, then resort the top N
+                        // if it is not in top N, then we do not have to do
                         // anything because counting down the route count
-                        // will not change the top 100
-                        int i = top100Routes.indexOf(routeCount);
+                        // will not change the top N
+                        int i = topNRoutes.indexOf(routeCount);
                         if (i != -1) {
                             List<RouteCount> top10 = null;
 
                             // save current top 10 for future comparison only if
                             // the route of the removed trip lies in top 10
                             if (i <= 9) {
-                                top10 = new LinkedList<>(top100Routes.subList(0, top100Routes.size() < 10 ?
-                                        top100Routes.size() : 10));
+                                top10 = new LinkedList<>(topNRoutes.subList(0, topNRoutes.size() < 10 ?
+                                        topNRoutes.size() : 10));
                             }
 
                             // flip elements from i-th to the last one
                             // until the current route is smaller
-                            for (int j = i, k = i + 1; k < top100Routes.size(); j++, k++) {
+                            for (int j = i, k = i + 1; k < topNRoutes.size(); j++, k++) {
                                 // route count at current position is smaller, then switch places
-                                if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
-                                    Collections.swap(top100Routes, j, k);
+                                if (topNRoutes.get(j).compareTo(topNRoutes.get(k)) < 0) {
+                                    Collections.swap(topNRoutes, j, k);
                                 }
                             }
 
-                            // if the element falls into the last place in top 100, then we need to
+                            // if the element falls into the last place in top N, then we need to
                             // resort all route count
-                            if (top100Routes.get(top100Routes.size() - 1).equals(routeCount)) {
-                                // a priority queue for top 10 routes. Orders by natural number.
-                                BoundedPriorityQueue<RouteCount> newTop100Routes = new BoundedPriorityQueue<>
-                                        (Comparator.<RouteCount>naturalOrder(), 100);
+                            if (topNRoutes.get(topNRoutes.size() - 1).equals(routeCount)) {
+                                // a priority queue for top N routes. Orders by natural number.
+                                BoundedPriorityQueue<RouteCount> newTopNRoutes = new BoundedPriorityQueue<>
+                                        (Comparator.<RouteCount>naturalOrder(), this.n);
 
-                                // try to add each route count to the top 100 list. This way we get sorted top 100 with
-                                // time complexity n * log(100) + 100 * log(100) vs. n * log(n)
-                                routesCount.forEach((r, rc) -> newTop100Routes.offer(rc));
+                                // try to add each route count to the top N list. This way we get sorted top N with
+                                // time complexity n * log(N) + N * log(N) vs. n * log(n), where N << n!
+                                routesCount.forEach((r, rc) -> newTopNRoutes.offer(rc));
 
-                                // copy to the top 100 routes and resort (100 * log(100))
-                                Collections.copy(top100Routes, new LinkedList<>(newTop100Routes));
-                                Collections.sort(top100Routes, Comparator.<RouteCount>reverseOrder());
+                                // copy to the top N routes and resort (N * log(N))
+                                Collections.copy(topNRoutes, new LinkedList<>(newTopNRoutes));
+                                Collections.sort(topNRoutes, Comparator.<RouteCount>reverseOrder());
                             }
 
                             // check if top 10 has changed
-                            if (top10 != null && !top10.equals(top100Routes.subList(0, top100Routes.size() < 10 ?
-                                    top100Routes.size() : 10))) {
-                                writeTop10ChangeQuery1(top100Routes.subList(0, top100Routes.size() < 10 ? top100Routes.size() : 10),
+                            if (top10 != null && !top10.equals(topNRoutes.subList(0, topNRoutes.size() < 10 ?
+                                    topNRoutes.size() : 10))) {
+                                writeTop10ChangeQuery1(topNRoutes.subList(0, topNRoutes.size() < 10 ? topNRoutes.size() : 10),
                                         trip.getPickupDatetime().plusMinutes(30),
                                         trip.getDropOffDatetime().plusMinutes(30),
                                         t.getTimestampReceived(), trip);
@@ -159,34 +174,34 @@ public class EDA extends Architecture {
                     routesCount.put(t.getRoute500(), routeCount);
 
                     // store current top 10
-                    LinkedList<RouteCount> top10 = new LinkedList<>(top100Routes.subList(0, top100Routes.size() < 10 ?
-                            top100Routes.size() : 10));
+                    LinkedList<RouteCount> top10 = new LinkedList<>(topNRoutes.subList(0, topNRoutes.size() < 10 ?
+                            topNRoutes.size() : 10));
 
-                    int i = top100Routes.indexOf(routeCount);
+                    int i = topNRoutes.indexOf(routeCount);
                     if (i != -1) {
-                        top100Routes.set(i, routeCount);
+                        topNRoutes.set(i, routeCount);
                         // flip elements from i-th to the first one
                         // until the current route is larger
                         for (int j = i - 1, k = i; j >= 0; j--, k--) {
                             // route count at current position is smaller, then switch places
-                            if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
-                                Collections.swap(top100Routes, j, k);
+                            if (topNRoutes.get(j).compareTo(topNRoutes.get(k)) < 0) {
+                                Collections.swap(topNRoutes, j, k);
                             }
                         }
                     } else {
-                        // check top 100 size
-                        if (top100Routes.size() < 100) {
-                            top100Routes.addLast(routeCount);
+                        // check top N size
+                        if (topNRoutes.size() < this.n) {
+                            topNRoutes.addLast(routeCount);
                         }
                         // compare it with the last element in top 100
-                        else if (top100Routes.getLast().compareTo(routeCount) < 0) {
-                            top100Routes.set(99, routeCount);
+                        else if (topNRoutes.getLast().compareTo(routeCount) < 0) {
+                            topNRoutes.set(this.n - 1, routeCount);
                         }
 
-                        for (int j = top100Routes.size() - 2, k = top100Routes.size() - 1; j >= 0; j--, k--) {
+                        for (int j = topNRoutes.size() - 2, k = topNRoutes.size() - 1; j >= 0; j--, k--) {
                             // route count at current position is smaller, then switch places
-                            if (top100Routes.get(j).compareTo(top100Routes.get(k)) < 0) {
-                                Collections.swap(top100Routes, j, k);
+                            if (topNRoutes.get(j).compareTo(topNRoutes.get(k)) < 0) {
+                                Collections.swap(topNRoutes, j, k);
                             }
                         }
                     }
@@ -194,23 +209,18 @@ public class EDA extends Architecture {
                             t.getTimestampReceived(), t);
 
                 })
-                .observeComplete(v -> {
-                    completeSignal.countDown();
-                })
                 .consume(ct -> {
-                    if (!ct.getT1().equals(top100Routes.subList(0, top100Routes.size() < 10 ?
-                            top100Routes.size() : 10))) {
-                        writeTop10ChangeQuery1(top100Routes.subList(0, top100Routes.size() < 10 ?
-                                        top100Routes.size() : 10), ct.getT2(), ct.getT3(), ct.getT4(),
+                    if (!ct.getT1().equals(topNRoutes.subList(0, topNRoutes.size() < 10 ?
+                            topNRoutes.size() : 10))) {
+                        writeTop10ChangeQuery1(topNRoutes.subList(0, topNRoutes.size() < 10 ?
+                                        topNRoutes.size() : 10), ct.getT2(), ct.getT3(), ct.getT4(),
                                 ct.getT5());
                     }
                 });
 
         // query 2: Frequent routes
         sharedTripsStream
-                .observeComplete(v -> {
-                    completeSignal.countDown();
-                })
+                .observeComplete(v -> completeSignal.countDown())
                 .consume();
 
         // read the stream from file: for local testing

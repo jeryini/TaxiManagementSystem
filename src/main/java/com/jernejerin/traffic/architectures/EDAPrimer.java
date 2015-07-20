@@ -52,15 +52,6 @@ public class EDAPrimer extends Architecture {
         // construct the EDA solution using the builder
         Architecture edaPrimer = new EDAPrimer(builder);
 
-        // Then we set up and register the PoolingDriver.
-        LOGGER.log(Level.INFO, "Registering pooling driver from thread = " + Thread.currentThread());
-        try {
-            PollingDriver.setupDriver("jdbc:mysql://" + edaPrimer.hostDB + ":" + edaPrimer.portDB + "/" +
-                    edaPrimer.schemaDB, edaPrimer.userDB, edaPrimer.passDB);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
         // run the solution
         edaPrimer.run();
     }
@@ -73,6 +64,15 @@ public class EDAPrimer extends Architecture {
      * @throws InterruptedException
      */
     public long run() throws InterruptedException {
+        // set up and register the PoolingDriver
+        LOGGER.log(Level.INFO, "Registering pooling driver from thread = " + Thread.currentThread());
+        try {
+            PollingDriver.setupDriver("jdbc:mysql://" + this.hostDB + ":" + this.portDB + "/" +
+                    this.schemaDB, this.userDB, this.passDB);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         long startTime = System.currentTimeMillis();
 
         // create a taxi service
@@ -100,12 +100,12 @@ public class EDAPrimer extends Architecture {
                 // parsing and validating trip structure
                 .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                 // filter invalid data
-                .filter(t -> t != null & t.getRoute250() != null)
+                .filter(t -> t != null && t.getRoute250() != null)
                 // insert record into DB
-                .map(t -> {
-                    TripOperations.insertTrip(t);
-                    return t;
-                })
+//                .map(t -> {
+//                    TripOperations.insertTrip(t);
+//                    return t;
+//                })
                 // wiring up 2 downstream pipelines
                 .broadcast();
 

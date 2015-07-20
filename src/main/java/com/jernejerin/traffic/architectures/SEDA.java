@@ -115,7 +115,7 @@ public class SEDA extends Architecture {
                                     // stage 1 is for validating ticket structure and filtering
                             .map(t -> TripOperations.parseValidateTrip(t.getT1(), t.getT2(), t.getT3()))
                                     // filter invalid data
-                            .filter(t -> t != null & t.getRoute250() != null)
+                            .filter(t -> t != null && t.getRoute250() != null)
             )
             // stage 2 consists of storing the trip into DB
             .partition(stage2T)
