@@ -238,55 +238,61 @@ public class EDA extends Architecture {
                         // a priority queue for top 10 cells. Orders by natural number.
                         BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
 
+                        boolean removed = false;
+                        for (CellProfitability cellProfitability : top10Cells) {
+                            // remove if the profitable cell exists that has the same end cell
+                            if (!cellProfitability.getCell().equals(t.getRoute250().getEndCell()))
+                                top10.offer(cellProfitability);
+                            else
+                                removed = true;
+                        }
+
                         Trip trip = tripEmptyTaxis.poll();
 
                         // update the empty taxis count for the end cell of the trip, leaving the window
                         EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getEndCell());
                         emptyTaxisCount.setCount(emptyTaxisCount.getCount() - 1);
 
-//                        int i = -1;
-//                        for (int j = 0; j < topNCellProfitability.size(); j++) {
-//                            if (topNCellProfitability.get(j).getCell().equals(trip.getRoute250().getEndCell())) {
-//                                i = j;
-//                                break;
-//                            }
-//                        }
-
                         // if count is 0 then remove the empty taxis to avoid unnecessary iteration
                         if (emptyTaxisCount.getCount() == 0) {
                             emptyTaxis.remove(emptyTaxisCount);
 
-                            // also if it exists in topN profitable cells, remove it because the cells
-                            // with 0 empty taxis should not be taken into account
-//                            if (i != -1) {
-//                                topNCellProfitability.remove(i);
-//
-//                                // we need to resort all profitable cells
-//                            }
+                            if (removed) {
+                                // change in top10, we need to recompute all
+                                emptyTaxis.forEach((ec, etc) -> {
+                                    // get the profit for current end cell
+                                    CellProfit endCellProfit = cellProfits.get(ec);
+                                    if (endCellProfit != null) {
+                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+                                    } else {
+                                        // end cell profit does not exist, just set median profit and profitability to 0
+                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                                    }
+                                });
+                            }
                         } else {
                             emptyTaxis.put(trip.getRoute250().getEndCell(), emptyTaxisCount);
 
-                            // if it exists in topN profitable cells, then we need to check it its profitability
-                            // has decreased so much that the next profitable cell in line will be greater
-                        }
-
-                        // recompute all profitable cells
-                        // only consider those cells that have empty taxis
-                        emptyTaxis.forEach((ec, etc) -> {
-                            // get the profit for current end cell
-                            CellProfit endCellProfit = cellProfits.get(ec);
-                            if (endCellProfit != null) {
-                                top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
-                                        endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
-                                        endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+                            // recompute the profitable cell only for the cell, whose leaving taxi trip
+                            // resulted in change of number of empty taxis
+                            CellProfit endCellProfit = cellProfits.get(trip.getRoute250().getEndCell());
+                            if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
+                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(),
+                                        emptyTaxisCount.getId() > endCellProfit.getId() ?
+                                                emptyTaxisCount.getId() : endCellProfit.getId(),
+                                        emptyTaxisCount.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                        endCellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
                             } else {
                                 // end cell profit does not exist, just set median profit and profitability to 0
-                                top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(), emptyTaxisCount.getId(),
+                                        emptyTaxisCount.getCount(), 0, 0));
                             }
-                        });
+                        }
 
                         List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
-                        // sort routes
+                        // sort profitable cells
                         top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
 
                         // if there is change in top 10, write it
@@ -297,43 +303,63 @@ public class EDA extends Architecture {
                                     trip.getDropOffDatetime().plusMinutes(30),
                                     t.getTimestampReceived());
                         }
-
                     }
+
                     while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
                             t.getDropOffTimestamp() - 15 * 60 * 1000) {
                         // a priority queue for top 10 cells. Orders by natural number.
                         BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
 
+                        boolean removed = false;
+                        for (CellProfitability cellProfitability : top10Cells) {
+                            // remove if the profitable cell exists that has the same end cell
+                            if (!cellProfitability.getCell().equals(t.getRoute250().getStartCell()))
+                                top10.offer(cellProfitability);
+                            else
+                                removed = true;
+                        }
+
                         Trip trip = tripProfits.poll();
 
-                        // update the empty taxis count for the end cell of the trip, leaving the window
+                        // update the cell profit for the start cell of the trip, leaving the window
                         CellProfit cellProfit = cellProfits.get(trip.getRoute250().getStartCell());
                         cellProfit.getMedianProfit().removeNumberFromStream(trip.getFareAmount() + trip.getTipAmount());
 
                         // if there is no profit on cell, then remove it
                         if (cellProfit.getMedianProfit().numOfElements == 0) {
                             cellProfits.remove(cellProfit);
+                            if (removed) {
+                                // change in top10, we need to recompute all
+                                emptyTaxis.forEach((ec, etc) -> {
+                                    // get the profit for current end cell
+                                    CellProfit endCellProfit = cellProfits.get(ec);
+                                    if (endCellProfit != null) {
+                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+                                    } else {
+                                        // end cell profit does not exist, just set median profit and profitability to 0
+                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                                    }
+                                });
+                            }
                         } else {
                             cellProfits.put(trip.getRoute250().getStartCell(), cellProfit);
+
+                            // recompute the profitable cell only for the cell, whose leaving taxi trip
+                            // resulted in change of cell profit
+                            EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getStartCell());
+                            if (emptyTaxisCount != null) {
+                                top10.offer(new CellProfitability(trip.getRoute250().getStartCell(),
+                                        emptyTaxisCount.getId() > cellProfit.getId() ?
+                                                emptyTaxisCount.getId() : cellProfit.getId(),
+                                        emptyTaxisCount.getCount(), cellProfit.getMedianProfit().getMedian(),
+                                        cellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
+                            }
                         }
 
-                        // recompute all profitable cells
-                        // only consider those cells that have empty taxis
-                        emptyTaxis.forEach((ec, etc) -> {
-                            // get the profit for current end cell
-                            CellProfit endCellProfit = cellProfits.get(ec);
-                            if (endCellProfit != null) {
-                                top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
-                                        endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
-                                        endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
-                            } else {
-                                // end cell profit does not exist, just set median profit and profitability to 0
-                                top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
-                            }
-                        });
-
                         List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
-                        // sort routes
+                        // sort profitable cells
                         top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
 
                         // if there is change in top 10, write it
@@ -364,18 +390,53 @@ public class EDA extends Architecture {
                     cellProfit.setId(t.getId());
                     cellProfits.put(t.getRoute250().getStartCell(), cellProfit);
 
-                    // update the profit and trip id for the cell profitability of the incoming trip
-                    // if the cell profitability does not yet exist, create a new one
-                    // TODO (Jernej Jerin): How do we store cell profitability?
-//                    CellProfitability cellProfitability = routesCount.getOrDefault(t.getRoute500(),
-//                            new RouteCount(t.getRoute500(), t.getId(), 0));
-//                    routeCount.setCount(routeCount.getCount() + 1);
-//                    routeCount.setId(t.getId());
-//                    routesCount.put(t.getRoute500(), routeCount);
+                    // storage for top 10 profitable cells
+                    BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+                    for (CellProfitability cellProfitability : top10Cells) {
+                        // remove both start and end cell
+                        if (!cellProfitability.getCell().equals(t.getRoute250().getEndCell()) &&
+                                !cellProfitability.getCell().equals(t.getRoute250().getStartCell()))
+                            top10.offer(cellProfitability);
+                    }
 
-                    return t;
+                    // add for both start and end cell
+                    // for end cell, we need to get cell profit
+                    CellProfit endCellProfit = cellProfits.get(t.getRoute250().getEndCell());
+                    if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
+                        top10.offer(new CellProfitability(t.getRoute250().getEndCell(), t.getId(),
+                                emptyTaxisCount.getCount(), endCellProfit.getMedianProfit().getMedian(),
+                                endCellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
+                    } else {
+                        // end cell profit does not exist, just set median profit and profitability to 0
+                        top10.offer(new CellProfitability(t.getRoute250().getEndCell(), t.getId(),
+                                emptyTaxisCount.getCount(), 0, 0));
+                    }
+
+                    // for start cell, we need to get empty taxis
+                    EmptyTaxisCount startCellEmptyTaxisCount = emptyTaxis.get(t.getRoute250().getStartCell());
+                    if (startCellEmptyTaxisCount != null && startCellEmptyTaxisCount.getCount() > 0) {
+                        top10.offer(new CellProfitability(t.getRoute250().getStartCell(), t.getId(),
+                                startCellEmptyTaxisCount.getCount(), cellProfit.getMedianProfit().getMedian(),
+                                cellProfit.getMedianProfit().getMedian() / startCellEmptyTaxisCount.getCount()));
+                    }
+
+                    List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
+                    // sort routes
+                    top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+
+                    return Tuple.of(top10SortedNew, t.getPickupDatetime(), t.getDropOffDatetime(),
+                            t.getTimestampReceived(), t);
                 })
-                .consume();
+                .consume(ct -> {
+                    // if there is change in top 10, write it
+                    if (!top10Cells.equals(ct.getT1())) {
+                        top10Cells.clear();
+                        top10Cells.addAll(ct.getT1());
+                        writeTop10ChangeQuery2(ct.getT1(), ct.getT2(),
+                                ct.getT3(),
+                                ct.getT4());
+                    }
+                });
 
         // read the stream from file: for local testing
         taxiStream.readStream();

@@ -48,17 +48,17 @@ public class ArchitectureTest extends TestCase {
         Architecture eda1 = new EDAPrimer(new ArchitectureBuilder().
 //                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
                 fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
-                fileNameQuery1Output("output/query/" + EDAPrimer.class.getSimpleName() + "_query1.txt"));
+                fileNameQuery2Output("output/query/" + EDAPrimer.class.getSimpleName() + "_query2.txt"));
         eda1.run();
 
         Architecture eda2 = new EDA(new ArchitectureBuilder().
 //                fileNameInput("trips_1_day_2013-01-01_2013-01-02_209276.csv").
                 fileNameInput("trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv").
-                fileNameQuery1Output("output/query/" + EDA.class.getSimpleName() + "_query1.txt"), 10);
+                fileNameQuery2Output("output/query/" + EDA.class.getSimpleName() + "_query2.txt"), 10);
         eda2.run();
 
-        BufferedReader eda1BuffReader = new BufferedReader(new FileReader(eda1.fileNameQuery1Output));
-        BufferedReader eda2BuffReader = new BufferedReader(new FileReader(eda2.fileNameQuery1Output));
+        BufferedReader eda1BuffReader = new BufferedReader(new FileReader(eda1.fileNameQuery2Output));
+        BufferedReader eda2BuffReader = new BufferedReader(new FileReader(eda2.fileNameQuery2Output));
 
         String expectedLine;
         while ((expectedLine = eda1BuffReader.readLine()) != null) {

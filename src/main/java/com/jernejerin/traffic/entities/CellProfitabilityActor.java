@@ -385,11 +385,12 @@ public class CellProfitabilityActor {
                         match(AddFareTipAmount.class, message -> {
                             // if it does not exist yet, add a new profitable cell with current fare + tip amount
                             if (profitableCells[(int) message.cellId] == null) {
-                                profitableCells[(int) message.cellId] = new
-                                        CellProfitability(message.cell, message.tripId, 0, message.fareTipAmount);
+                                // TODO (Jernej Jerin): Check why we still use CellProfitability with medianProfitCell.
+//                                profitableCells[(int) message.cellId] = new
+//                                        CellProfitability(message.cell, message.tripId, 0, message.fareTipAmount);
                             } else {
                                 // otherwise update median profit with current fare + tip amount
-                                profitableCells[(int) message.cellId].getMedianProfitCell().addNumberToStream(message.fareTipAmount);
+//                                profitableCells[(int) message.cellId].getMedianProfitCell().addNumberToStream(message.fareTipAmount);
                                 profitableCells[(int) message.cellId].setId(message.tripId);
                             }
 
@@ -403,7 +404,7 @@ public class CellProfitabilityActor {
                         // message remove current fare + tip amount
                                 match(RemoveFareTipAmount.class, message -> {
                             // update median profit with current fare + tip amount
-                            profitableCells[(int) message.cellId].getMedianProfitCell().removeNumberFromStream(message.fareTipAmount);
+//                            profitableCells[(int) message.cellId].getMedianProfitCell().removeNumberFromStream(message.fareTipAmount);
 
                             // we can get 0 number of empty taxis, so we need to check for empty taxis
                             CellProfitability[] newProfitableCells = checkForEmpty(profitableCells, (int) message.cellId);

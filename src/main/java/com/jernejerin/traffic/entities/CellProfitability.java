@@ -8,7 +8,7 @@ import org.apache.commons.lang3.builder.HashCodeBuilder;
  * A value class that holds profitability of the cells.
  *
  * <b>
- *     Note: this class has a natural ordering that is inconsistent with equals..
+ *     Note: this class has a natural ordering that is inconsistent with equals.
  *
  * @author Jernej Jerin
  */
@@ -18,7 +18,6 @@ public class CellProfitability implements Comparable<CellProfitability> {
     private int emptyTaxis;
     private double medianProfit;
     private double profitability;
-    private MedianOfStream<Float> medianProfitCell;
 
     public CellProfitability(Cell cell, int id, int emptyTaxis, double medianProfit, double profitability) {
         this.cell = cell;
@@ -26,13 +25,6 @@ public class CellProfitability implements Comparable<CellProfitability> {
         this.emptyTaxis = emptyTaxis;
         this.medianProfit = medianProfit;
         this.profitability = profitability;
-    }
-
-    public CellProfitability(Cell cell, int id, int emptyTaxis, float profit) {
-        this.cell = cell;
-        this.id = id;
-        this.emptyTaxis = emptyTaxis;
-        this.medianProfitCell = new MedianOfStream<Float>(profit);
     }
 
     public Cell getCell() {
@@ -71,14 +63,6 @@ public class CellProfitability implements Comparable<CellProfitability> {
         return profitability;
     }
 
-    public MedianOfStream<Float> getMedianProfitCell() {
-        return medianProfitCell;
-    }
-
-    public void setMedianProfitCell(MedianOfStream<Float> medianProfitCell) {
-        this.medianProfitCell = medianProfitCell;
-    }
-
     @Override
     /**
      * Compute hash code by using Apache Commons Lang HashCodeBuilder.
@@ -86,10 +70,6 @@ public class CellProfitability implements Comparable<CellProfitability> {
     public int hashCode() {
         return new HashCodeBuilder(73, 79)
                 .append(this.cell)
-                .append(this.id)
-                .append(this.emptyTaxis)
-                .append(this.medianProfit)
-                .append(this.profitability)
                 .toHashCode();
     }
 
@@ -106,10 +86,6 @@ public class CellProfitability implements Comparable<CellProfitability> {
         CellProfitability cellProfitability = (CellProfitability) obj;
         return new EqualsBuilder()
                 .append(this.cell, cellProfitability.cell)
-                .append(this.id, cellProfitability.id)
-                .append(this.emptyTaxis, cellProfitability.emptyTaxis)
-                .append(this.medianProfit, cellProfitability.medianProfit)
-                .append(this.profitability, cellProfitability.profitability)
                 .isEquals();
     }
 
