@@ -2,9 +2,12 @@ package com.jernejerin.traffic.evaluation;
 
 import com.jernejerin.traffic.architectures.*;
 import com.jernejerin.traffic.helper.MedianOfStream;
+import com.jernejerin.traffic.helper.PollingDriver;
 import com.jernejerin.traffic.helper.SimpleCellRefGenerator;
+import com.jernejerin.traffic.helper.TripOperations;
 import com.sun.tools.attach.VirtualMachine;
 import com.sun.tools.attach.VirtualMachineDescriptor;
+import org.apache.logging.log4j.core.util.FileUtils;
 import org.jxls.area.XlsArea;
 import org.jxls.command.Command;
 import org.jxls.command.EachCommand;
@@ -15,10 +18,7 @@ import org.jxls.transform.Transformer;
 import org.jxls.util.TransformerFactory;
 import sun.tools.attach.HotSpotVirtualMachine;
 
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -36,6 +36,10 @@ import java.util.Optional;
  */
 public class Evaluation {
     public static void main(String[] args) throws Exception {
+        ArchitectureBuilder builder = new ArchitectureBuilder();
+
+        // set host and port from command line options
+        builder.setOptionsCmd(args);
 
         // enumerate all the locally running Java processes and get the process that is running the Evaluation program
         Optional<VirtualMachineDescriptor> evaluationProgram = VirtualMachine.list().stream().
@@ -62,25 +66,19 @@ public class Evaluation {
 
         // a list of architectures to evaluate
         List<Architecture> architectures = new ArrayList<>();
-        for (int i = 10; i <= 200; i+= 10) {
-            architectures.add(new EDA(new ArchitectureBuilder(), i));
-        }
-//        architectures.add(new SEDA(new ArchitectureBuilder()));
-//        architectures.add(new EDAPrimer(new ArchitectureBuilder()));
-//        architectures.add(new EDA(new ArchitectureBuilder()));
+        architectures.add(new EDAPrimer(builder));
 
         // number of times to run the evaluation for each architecture
-        int numTimes = 5;
+        int numTimes = 10;
 
         // variable for storing measurements of the architecture
         List<Measurement> measurements = new ArrayList<>(architectures.size());
 
-        int id = 10;
         // run each architecture, which generates output in diagnostics, query and reports
         for (Architecture architecture : architectures) {
-            Measurement measurement = evaluate(architecture, numTimes, id);
-            measurement.name = "EDA" + id;
-            id += 10;
+            // HERE IS THE EVALUATION CALL
+            Measurement measurement = evaluate(architecture, numTimes);
+            measurement.name = architecture.getClass().getSimpleName();
             measurements.add(measurement);
         }
 
@@ -141,7 +139,7 @@ public class Evaluation {
      * @throws IOException
      */
     public static Measurement evaluate(Architecture architecture,
-            int numTimes, int id) throws InterruptedException, IOException {
+            int numTimes) throws InterruptedException, IOException {
         MedianOfStream<Long> medianDuration = new MedianOfStream<>();
         MedianOfStream<Double> medianDelayQuery1 = new MedianOfStream<>();
         MedianOfStream<Double> medianDelayQuery2 = new MedianOfStream<>();
@@ -150,38 +148,44 @@ public class Evaluation {
         List<RunMeasurement> results = new ArrayList<>(numTimes);
 
         //  run once before taking measurements to avoid taking into account cache misses
-        architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query1_cache.txt");
-        architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query2_cache.txt");
+        architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + "_query1_cache.txt");
+        architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + "_query2_cache.txt");
         architecture.run();
 
         for (int i = 0; i < numTimes; i++) {
-            architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query1_" + i + ".txt");
-            architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + id + "_query2_" + i + ".txt");
+            architecture.setFileNameQuery1Output("output/query/" + architecture.getClass().getSimpleName() + "_query1_" + i + ".txt");
+            architecture.setFileNameQuery2Output("output/query/" + architecture.getClass().getSimpleName() + "_query2_" + i + ".txt");
 
             // TODO (Jernej Jerin): Trigger Java Mission Control Flight Recorder
             long duration = architecture.run();
 
-            // query 1
+            // query 1 and query 2 average
             double averageDelayQuery1 = getAverage(architecture.getFileQuery1().toPath());
-            long minDelayQuery1 = getMin(architecture.getFileQuery1().toPath());
-            long maxDelayQuery1 = getMax(architecture.getFileQuery1().toPath());
-
-//            double averageDelayQuery2 = getAverage(architecture.getFileQuery2().toPath());
+            double averageDelayQuery2 = getAverage(architecture.getFileQuery2().toPath());
 
             // save the duration to median
             medianDuration.addNumberToStream(duration);
 
             // compute the average delay and save it to median
             medianDelayQuery1.addNumberToStream(averageDelayQuery1);
-//            medianDelayQuery2.addNumberToStream(averageDelayQuery2);
+            medianDelayQuery2.addNumberToStream(averageDelayQuery2);
 
+            // TODO (Jernej Jerin): add max, min values for buffer size, CPU and heap memory
             results.add(new RunMeasurement(i, duration, new MaxMinAverageMeasurement<>
-                    (averageDelayQuery1, minDelayQuery1, maxDelayQuery1), new MaxMinAverageMeasurement<>
-                    (0d, 0l, 0l), new MaxMinAverageMeasurement<>
+                    (averageDelayQuery1, getMin(architecture.getFileQuery1().toPath()),
+                            getMax(architecture.getFileQuery1().toPath())), new MaxMinAverageMeasurement<>
+                    (averageDelayQuery2, getMin(architecture.getFileQuery2().toPath()),
+                            getMax(architecture.getFileQuery2().toPath())), new MaxMinAverageMeasurement<>
                     (0d, 0l, 0l), new MaxMinAverageMeasurement<>
                     (0d, 0l, 0l), new MaxMinAverageMeasurement<>
                     (0d, 0l, 0l)));
+
+            // clear output files and truncate db
+            clearOutput();
+            clearDB("trip");
+            clearDB("tripchangetop10");
         }
+        // TODO (Jernej Jerin): add median values for buffer size, CPU and heap memory
         return new Measurement(numTimes, architecture.getClass().getSimpleName(), medianDuration.getMedian(),
                 medianDelayQuery1.getMedian(), 0d, 0, 0d, 0d, results);
     }
@@ -260,5 +264,23 @@ public class Evaluation {
             System.out.format("%30d%30d%30f%n", runMeasurement.heapMemory.max, runMeasurement.heapMemory.min,
                     runMeasurement.heapMemory.average);
         }
+    }
+
+    /**
+     * Clears the output folder of generated output.
+     */
+    public static void clearOutput() {
+        File dir = new File("output/query/");
+        for (File file : dir.listFiles())
+            file.delete();
+    }
+
+    /**
+     * Truncates MySql DB.
+     *
+     * @param table table to truncate
+     */
+    public static void clearDB(String table) {
+        TripOperations.truncateTable(table);
     }
 }

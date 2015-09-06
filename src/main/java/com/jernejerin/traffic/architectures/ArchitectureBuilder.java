@@ -34,10 +34,10 @@ public class ArchitectureBuilder {
     protected String fileNameInput = "trips_1_hour_2013-01-01-00-00_2013-01-01-01-00_10799.csv";
 
     /** The output file name for query 1. */
-    protected String fileNameQuery1Output = "query1.txt";
+    protected String fileNameQuery1Output = "output/query/query1.txt";
 
     /** The output file name for query 2. */
-    protected String fileNameQuery2Output = "query2.txt";
+    protected String fileNameQuery2Output = "output/query/query2.txt";
 
     /** The default value if we are streaming from TCP client. */
     protected boolean streamingTCP = false;

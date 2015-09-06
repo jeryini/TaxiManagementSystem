@@ -92,11 +92,51 @@ public class TripOperations {
     }
 
     /**
+     * Truncate table.
+     *
+     * @param table table to truncate
+     */
+    public static void truncateTable(String table) {
+//        LOGGER.log(Level.INFO, "Started inserting trip into DB for trip = " +
+//                trip.toString() + " from thread = " + Thread.currentThread());
+        PreparedStatement truncateTable = null;
+        Connection conn = null;
+        try {
+            // first we need to get connection from connection pool
+            conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:taxi");
+
+            // setting up prepared statement
+            truncateTable = conn.prepareStatement("truncate " + table);
+            truncateTable.execute();
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "Problem when truncating table = " +
+                    table + " from thread = " + Thread.currentThread());
+        } finally {
+            try {
+                if (truncateTable != null) truncateTable.close();
+            }
+            catch(Exception e) {
+                LOGGER.log(Level.SEVERE, "Problem with closing prepared statement for truncating table = " +
+                        table + " from thread = " + Thread.currentThread());
+            }
+            try {
+                if (conn != null) conn.close();
+            }
+            catch(Exception e) {
+                LOGGER.log(Level.SEVERE, "Problem with closing connection from thread = " + Thread.currentThread());
+            }
+//            LOGGER.log(Level.INFO, "Finished inserting ticket into DB for for ticket = " +
+//                    trip + " from thread = " + Thread.currentThread());
+        }
+    }
+
+    /**
      * Insert a trip into database.
      *
      * @param trip trip to insert.
+     * @param table table into which we need to insert trip
      */
-    public static void insertTrip(Trip trip) {
+    public static void insertTrip(Trip trip, String table) {
 //        LOGGER.log(Level.INFO, "Started inserting trip into DB for trip = " +
 //                trip.toString() + " from thread = " + Thread.currentThread());
         PreparedStatement insertTrip = null;
@@ -106,7 +146,7 @@ public class TripOperations {
             conn = DriverManager.getConnection("jdbc:apache:commons:dbcp:taxi");
 
             // setting up prepared statement
-            insertTrip = conn.prepareStatement("insert into trip (eventId, medallion, hack_license, pickup_datetime, " +
+            insertTrip = conn.prepareStatement("insert into " + table + " (eventId, medallion, hack_license, pickup_datetime, " +
                     "dropoff_datetime, trip_time, trip_distance, pickup_longitude, pickup_latitude, dropoff_longitude, " +
                     "dropoff_latitude, payment_type, fare_amount, surcharge, mta_tax, tip_amount, tolls_amount, " +
                     "total_amount, timestampReceived) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");

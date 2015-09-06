@@ -86,9 +86,8 @@ public class EDA extends Architecture {
         // key value storage
         final LinkedHashMap<Route, RouteCount> routesCount = new LinkedHashMap<>(100000);
         final LinkedHashMap<Cell, EmptyTaxisCount> emptyTaxis = new LinkedHashMap<>(100000);
+        final HashMap<String, Cell> emptyTaxisMedallion = new HashMap<>();
         final LinkedHashMap<Cell, CellProfit> cellProfits = new LinkedHashMap<>(100000);
-
-
 
         CountDownLatch completeSignal = new CountDownLatch(2);
 
@@ -233,148 +232,210 @@ public class EDA extends Architecture {
         sharedTripsStream
                 .observeComplete(v -> completeSignal.countDown())
                 .map(t -> {
-                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
-                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
-                        // a priority queue for top 10 cells. Orders by natural number.
-                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
-
-                        boolean removed = false;
-                        for (CellProfitability cellProfitability : top10Cells) {
-                            // remove if the profitable cell exists that has the same end cell
-                            if (!cellProfitability.getCell().equals(t.getRoute250().getEndCell()))
-                                top10.offer(cellProfitability);
-                            else
-                                removed = true;
-                        }
-
-                        Trip trip = tripEmptyTaxis.poll();
-
-                        // update the empty taxis count for the end cell of the trip, leaving the window
-                        EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getEndCell());
-                        emptyTaxisCount.setCount(emptyTaxisCount.getCount() - 1);
-
-                        // if count is 0 then remove the empty taxis to avoid unnecessary iteration
-                        if (emptyTaxisCount.getCount() == 0) {
-                            emptyTaxis.remove(emptyTaxisCount);
-
-                            if (removed) {
-                                // change in top10, we need to recompute all
-                                emptyTaxis.forEach((ec, etc) -> {
-                                    // get the profit for current end cell
-                                    CellProfit endCellProfit = cellProfits.get(ec);
-                                    if (endCellProfit != null) {
-                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
-                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
-                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
-                                    } else {
-                                        // end cell profit does not exist, just set median profit and profitability to 0
-                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
-                                    }
-                                });
-                            }
-                        } else {
-                            emptyTaxis.put(trip.getRoute250().getEndCell(), emptyTaxisCount);
-
-                            // recompute the profitable cell only for the cell, whose leaving taxi trip
-                            // resulted in change of number of empty taxis
-                            CellProfit endCellProfit = cellProfits.get(trip.getRoute250().getEndCell());
-                            if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
-                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(),
-                                        emptyTaxisCount.getId() > endCellProfit.getId() ?
-                                                emptyTaxisCount.getId() : endCellProfit.getId(),
-                                        emptyTaxisCount.getCount(), endCellProfit.getMedianProfit().getMedian(),
-                                        endCellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
-                            } else {
-                                // end cell profit does not exist, just set median profit and profitability to 0
-                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(), emptyTaxisCount.getId(),
-                                        emptyTaxisCount.getCount(), 0, 0));
-                            }
-                        }
-
-                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
-                        // sort profitable cells
-                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
-
-                        // if there is change in top 10, write it
-                        if (!top10Cells.equals(top10SortedNew)) {
-                            top10Cells.clear();
-                            top10Cells.addAll(top10SortedNew);
-                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
-                                    trip.getDropOffDatetime().plusMinutes(30),
-                                    t.getTimestampReceived());
-                        }
-                    }
-
-                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
-                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
-                        // a priority queue for top 10 cells. Orders by natural number.
-                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
-
-                        boolean removed = false;
-                        for (CellProfitability cellProfitability : top10Cells) {
-                            // remove if the profitable cell exists that has the same end cell
-                            if (!cellProfitability.getCell().equals(t.getRoute250().getStartCell()))
-                                top10.offer(cellProfitability);
-                            else
-                                removed = true;
-                        }
-
-                        Trip trip = tripProfits.poll();
-
-                        // update the cell profit for the start cell of the trip, leaving the window
-                        CellProfit cellProfit = cellProfits.get(trip.getRoute250().getStartCell());
-                        cellProfit.getMedianProfit().removeNumberFromStream(trip.getFareAmount() + trip.getTipAmount());
-
-                        // if there is no profit on cell, then remove it
-                        if (cellProfit.getMedianProfit().numOfElements == 0) {
-                            cellProfits.remove(cellProfit);
-                            if (removed) {
-                                // change in top10, we need to recompute all
-                                emptyTaxis.forEach((ec, etc) -> {
-                                    // get the profit for current end cell
-                                    CellProfit endCellProfit = cellProfits.get(ec);
-                                    if (endCellProfit != null) {
-                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
-                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
-                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
-                                    } else {
-                                        // end cell profit does not exist, just set median profit and profitability to 0
-                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
-                                    }
-                                });
-                            }
-                        } else {
-                            cellProfits.put(trip.getRoute250().getStartCell(), cellProfit);
-
-                            // recompute the profitable cell only for the cell, whose leaving taxi trip
-                            // resulted in change of cell profit
-                            EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getStartCell());
-                            if (emptyTaxisCount != null) {
-                                top10.offer(new CellProfitability(trip.getRoute250().getStartCell(),
-                                        emptyTaxisCount.getId() > cellProfit.getId() ?
-                                                emptyTaxisCount.getId() : cellProfit.getId(),
-                                        emptyTaxisCount.getCount(), cellProfit.getMedianProfit().getMedian(),
-                                        cellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
-                            }
-                        }
-
-                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
-                        // sort profitable cells
-                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
-
-                        // if there is change in top 10, write it
-                        if (!top10Cells.equals(top10SortedNew)) {
-                            top10Cells.clear();
-                            top10Cells.addAll(top10SortedNew);
-                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
-                                    trip.getDropOffDatetime().plusMinutes(30),
-                                    t.getTimestampReceived());
-                        }
-                    }
+//                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
+//                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+//                        // a priority queue for top 10 cells. Orders by natural number.
+//                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+//
+//                        boolean removed = false;
+//                        for (CellProfitability cellProfitability : top10Cells) {
+//                            // remove if the profitable cell exists that has the same end cell
+//                            if (!cellProfitability.getCell().equals(t.getRoute250().getEndCell()))
+//                                top10.offer(cellProfitability);
+//                            else
+//                                removed = true;
+//                        }
+//
+//                        Trip trip = tripEmptyTaxis.poll();
+//
+//                        // update the empty taxis count for the end cell of the trip, leaving the window
+//                        EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getEndCell());
+//                        emptyTaxisCount.setCount(emptyTaxisCount.getCount() - 1);
+//
+//                        // if count is 0 then remove the empty taxis to avoid unnecessary iteration
+//                        if (emptyTaxisCount.getCount() <= 0) {
+//                            emptyTaxis.remove(emptyTaxisCount);
+//
+////                            if (removed) {
+////                                // change in top10, we need to recompute all
+////                                emptyTaxis.forEach((ec, etc) -> {
+////                                    // get the profit for current end cell
+////                                    CellProfit endCellProfit = cellProfits.get(ec);
+////                                    if (endCellProfit != null) {
+////                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+////                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+////                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+////                                    } else {
+////                                        // end cell profit does not exist, just set median profit and profitability to 0
+////                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+////                                    }
+////                                });
+////                            }
+//                        } else {
+//                            emptyTaxis.put(trip.getRoute250().getEndCell(), emptyTaxisCount);
+//
+////                            // recompute the profitable cell only for the cell, whose leaving taxi trip
+////                            // resulted in change of number of empty taxis
+////                            CellProfit endCellProfit = cellProfits.get(trip.getRoute250().getEndCell());
+////                            if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
+////                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(),
+////                                        emptyTaxisCount.getId() > endCellProfit.getId() ?
+////                                                emptyTaxisCount.getId() : endCellProfit.getId(),
+////                                        emptyTaxisCount.getCount(), endCellProfit.getMedianProfit().getMedian(),
+////                                        endCellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
+////                            } else {
+////                                // end cell profit does not exist, just set median profit and profitability to 0
+////                                top10.offer(new CellProfitability(trip.getRoute250().getEndCell(), emptyTaxisCount.getId(),
+////                                        emptyTaxisCount.getCount(), 0, 0));
+////                            }
+//                        }
+//
+//                        top10.clear();
+//                        emptyTaxis.forEach((ec, etc) -> {
+//                            if (etc.getCount() > 0) {
+//                                // get the profit for current end cell
+//                                CellProfit cellProfit2 = cellProfits.get(ec);
+//                                if (cellProfit2 != null && cellProfit2.getMedianProfit().numOfElements > 0) {
+//                                    top10.offer(new CellProfitability(ec, etc.getId() > cellProfit2.getId() ? etc.getId() :
+//                                            cellProfit2.getId(), etc.getCount(), cellProfit2.getMedianProfit().getMedian(),
+//                                            cellProfit2.getMedianProfit().getMedian() / etc.getCount()));
+//                                } else {
+//                                    // end cell profit does not exist, just set median profit and profitability to 0
+//                                    top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+//                                }
+//                            }
+//                        });
+//
+//                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
+//                        // sort profitable cells
+//                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+//
+//                        // if there is change in top 10, write it
+//                        if (!top10Cells.equals(top10SortedNew)) {
+//                            top10Cells.clear();
+//                            top10Cells.addAll(top10SortedNew);
+//                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
+//                                    trip.getDropOffDatetime().plusMinutes(30),
+//                                    t.getTimestampReceived());
+//                        }
+//                    }
+//
+//                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
+//                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
+//                        // a priority queue for top 10 cells. Orders by natural number.
+//                        BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+//
+//                        boolean removed = false;
+//                        for (CellProfitability cellProfitability : top10Cells) {
+//                            // remove if the profitable cell exists that has the same end cell
+//                            if (!cellProfitability.getCell().equals(t.getRoute250().getStartCell()))
+//                                top10.offer(cellProfitability);
+//                            else
+//                                removed = true;
+//                        }
+//
+//                        Trip trip = tripProfits.poll();
+//
+//                        // update the cell profit for the start cell of the trip, leaving the window
+//                        CellProfit cellProfit = cellProfits.get(trip.getRoute250().getStartCell());
+//                        cellProfit.getMedianProfit().removeNumberFromStream(trip.getFareAmount() + trip.getTipAmount());
+//
+//                        // if there is no profit on cell, then remove it
+//                        if (cellProfit.getMedianProfit().numOfElements == 0) {
+//                            cellProfits.remove(cellProfit);
+////                            if (removed) {
+////                                // change in top10, we need to recompute all
+////                                emptyTaxis.forEach((ec, etc) -> {
+////                                    // get the profit for current end cell
+////                                    CellProfit endCellProfit = cellProfits.get(ec);
+////                                    if (endCellProfit != null) {
+////                                        top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
+////                                                endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
+////                                                endCellProfit.getMedianProfit().getMedian() / etc.getCount()));
+////                                    } else {
+////                                        // end cell profit does not exist, just set median profit and profitability to 0
+////                                        top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+////                                    }
+////                                });
+////                            }
+//                        } else {
+//                            cellProfits.put(trip.getRoute250().getStartCell(), cellProfit);
+//
+////                            // recompute the profitable cell only for the cell, whose leaving taxi trip
+////                            // resulted in change of cell profit
+////                            EmptyTaxisCount emptyTaxisCount = emptyTaxis.get(trip.getRoute250().getStartCell());
+////                            if (emptyTaxisCount != null) {
+////                                top10.offer(new CellProfitability(trip.getRoute250().getStartCell(),
+////                                        emptyTaxisCount.getId() > cellProfit.getId() ?
+////                                                emptyTaxisCount.getId() : cellProfit.getId(),
+////                                        emptyTaxisCount.getCount(), cellProfit.getMedianProfit().getMedian(),
+////                                        cellProfit.getMedianProfit().getMedian() / emptyTaxisCount.getCount()));
+////                            }
+//                        }
+//
+//                        top10.clear();
+//                        emptyTaxis.forEach((ec, etc) -> {
+//                            if (etc.getCount() > 0) {
+//                                // get the profit for current end cell
+//                                CellProfit cellProfit2 = cellProfits.get(ec);
+//                                if (cellProfit2 != null && cellProfit2.getMedianProfit().numOfElements > 0) {
+//                                    top10.offer(new CellProfitability(ec, etc.getId() > cellProfit2.getId() ? etc.getId() :
+//                                            cellProfit2.getId(), etc.getCount(), cellProfit2.getMedianProfit().getMedian(),
+//                                            cellProfit2.getMedianProfit().getMedian() / etc.getCount()));
+//                                } else {
+//                                    // end cell profit does not exist, just set median profit and profitability to 0
+//                                    top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+//                                }
+//                            }
+//                        });
+//
+//                        List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
+//                        // sort profitable cells
+//                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+//
+//                        // if there is change in top 10, write it
+//                        if (!top10Cells.equals(top10SortedNew)) {
+//                            top10Cells.clear();
+//                            top10Cells.addAll(top10SortedNew);
+//                            writeTop10ChangeQuery2(top10SortedNew, trip.getPickupDatetime().plusMinutes(30),
+//                                    trip.getDropOffDatetime().plusMinutes(30),
+//                                    t.getTimestampReceived());
+//                        }
+//                    }
 
                     // store trip in both windows
                     tripEmptyTaxis.add(t);
                     tripProfits.add(t);
+
+                    // we need to remove the trip from empty taxis, that has the same medallion
+                    // As new trip arrives, the previous empty taxi for end cell is not valid anymore
+                    // This basically mimics filter operation defined in EDAPrimer.
+                    Cell endCell = emptyTaxisMedallion.getOrDefault(t.getMedallion(), null);
+                    CellProfitability previousEndCellProfitability = null;
+                    if (endCell != null) {
+                        EmptyTaxisCount etc = emptyTaxis.getOrDefault(endCell, null);
+                        if (etc != null) {
+                            etc.setCount(etc.getCount() - 1);
+                            if (etc.getCount() == 0)
+                                emptyTaxis.remove(endCell);
+                            else {
+                                emptyTaxis.put(endCell, etc);
+                            }
+
+                            // we need to update the previous end cell profitability
+                            CellProfit cellProfit = cellProfits.getOrDefault(endCell, null);
+
+                            if (cellProfit != null && cellProfit.getMedianProfit().numOfElements > 0) {
+                                previousEndCellProfitability = new CellProfitability(endCell, etc.getId() > cellProfit.getId() ? etc.getId() :
+                                        cellProfit.getId(), etc.getCount(), cellProfit.getMedianProfit().getMedian(),
+                                        cellProfit.getMedianProfit().getMedian() / etc.getCount());
+                            } else {
+                                // end cell profit does not exist, just set median profit and profitability to 0
+                                previousEndCellProfitability = new CellProfitability(endCell, etc.getId(), etc.getCount(), 0, 0);
+                            }
+                        }
+                    }
+                    emptyTaxisMedallion.put(t.getMedallion(), t.getRoute250().getEndCell());
 
                     // update map for empty taxi count
                     EmptyTaxisCount emptyTaxisCount = emptyTaxis.getOrDefault(t.getRoute250().getEndCell(),
@@ -392,14 +453,22 @@ public class EDA extends Architecture {
 
                     // storage for top 10 profitable cells
                     BoundedPriorityQueue<CellProfitability> top10 = new BoundedPriorityQueue<>(Comparator.<CellProfitability>naturalOrder(), 10);
+
+                    boolean removed = false;
                     for (CellProfitability cellProfitability : top10Cells) {
                         // remove both start and end cell
                         if (!cellProfitability.getCell().equals(t.getRoute250().getEndCell()) &&
-                                !cellProfitability.getCell().equals(t.getRoute250().getStartCell()))
+                                !cellProfitability.getCell().equals(t.getRoute250().getStartCell()) &&
+                                !(previousEndCellProfitability != null &&
+                                cellProfitability.getCell().equals(previousEndCellProfitability.getCell()))) {
                             top10.offer(cellProfitability);
+                        } else {
+                            removed = true;
+                        }
                     }
 
-                    // add for both start and end cell
+
+                    // add for both start, end cell and previous taxi end cell
                     // for end cell, we need to get cell profit
                     CellProfit endCellProfit = cellProfits.get(t.getRoute250().getEndCell());
                     if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
@@ -420,9 +489,41 @@ public class EDA extends Architecture {
                                 cellProfit.getMedianProfit().getMedian() / startCellEmptyTaxisCount.getCount()));
                     }
 
+                    // add previous end cell profit
+                    if (previousEndCellProfitability != null)
+                        top10.offer(previousEndCellProfitability);
+
                     List<CellProfitability> top10SortedNew = new LinkedList<>(top10);
                     // sort routes
                     top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+
+                    // check if profitable cells were already in top n and if now are in position n-2 or n-1
+                    // in that case we need to resort all
+                    if (removed && top10SortedNew.size() > 1 && (top10SortedNew.get(top10SortedNew.size() - 2).getCell().equals(t.getRoute250().getEndCell()) ||
+                            top10SortedNew.get(top10SortedNew.size() - 2).getCell().equals(t.getRoute250().getStartCell()) ||
+                            top10SortedNew.get(top10SortedNew.size() - 1).getCell().equals(t.getRoute250().getEndCell()) ||
+                            top10SortedNew.get(top10SortedNew.size() - 1).getCell().equals(t.getRoute250().getStartCell()))) {
+                        top10.clear();
+                        emptyTaxis.forEach((ec, etc) -> {
+                            // get the profit for current end cell
+                            if (etc.getCount() > 0) {
+                                CellProfit cellProfit2 = cellProfits.get(ec);
+                                if (cellProfit2 != null && cellProfit2.getMedianProfit().numOfElements > 0) {
+                                    top10.offer(new CellProfitability(ec, etc.getId() > cellProfit2.getId() ? etc.getId() :
+                                            cellProfit2.getId(), etc.getCount(), cellProfit2.getMedianProfit().getMedian(),
+                                            cellProfit2.getMedianProfit().getMedian() / etc.getCount()));
+                                } else {
+                                    // end cell profit does not exist, just set median profit and profitability to 0
+                                    top10.offer(new CellProfitability(ec, etc.getId(), etc.getCount(), 0, 0));
+                                }
+                            }
+                        });
+
+                        top10SortedNew.clear();
+                        top10SortedNew.addAll(top10);
+                        // sort routes
+                        top10SortedNew.sort(Comparator.<CellProfitability>reverseOrder());
+                    }
 
                     return Tuple.of(top10SortedNew, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);

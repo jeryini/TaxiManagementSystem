@@ -123,7 +123,7 @@ public class SEDA extends Architecture {
                             .dispatchOn(supplierStage2.get())
                             .map(trip -> {
                                 // insert into DB
-                                TripOperations.insertTrip(trip);
+                                TripOperations.insertTrip(trip, "trip");
                                 return trip;
                             })
             )

@@ -102,10 +102,10 @@ public class EDAPrimer extends Architecture {
                 // filter invalid data
                 .filter(t -> t != null && t.getRoute250() != null)
                 // insert record into DB
-//                .map(t -> {
-//                    TripOperations.insertTrip(t);
-//                    return t;
-//                })
+                .map(t -> {
+                    TripOperations.insertTrip(t, "trip");
+                    return t;
+                })
                 // wiring up 2 downstream pipelines
                 .broadcast();
 
@@ -138,12 +138,16 @@ public class EDAPrimer extends Architecture {
                     return Tuple.of(bestRoutes, t.getPickupDatetime(), t.getDropOffDatetime(),
                             t.getTimestampReceived(), t);
                 })
+                // filter all events that DID NOT change top 10 routes
+                .filter(ct -> !top10Routes.equals(ct.getT1()))
                 .consume(ct -> {
-                    if (!top10Routes.equals(ct.getT1())) {
-                        top10Routes.clear();
-                        top10Routes.addAll(ct.getT1());
-                        writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
-                    }
+                    top10Routes.clear();
+                    top10Routes.addAll(ct.getT1());
+                    // write to output file
+                    writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
+
+                    // write to DB all incoming events that triggered change in the top 10 routes
+                    TripOperations.insertTrip(ct.getT5(), "tripChangeTop10");
                 });
 
 
@@ -287,7 +291,7 @@ public class EDAPrimer extends Architecture {
         emptyTaxis.forEach((ec, etc) -> {
             // get the profit for current end cell
             CellProfit endCellProfit = profits.get(ec);
-            if (endCellProfit != null) {
+            if (endCellProfit != null && endCellProfit.getMedianProfit().numOfElements > 0) {
                 top10.offer(new CellProfitability(ec, etc.getId() > endCellProfit.getId() ? etc.getId() :
                         endCellProfit.getId(), etc.getCount(), endCellProfit.getMedianProfit().getMedian(),
                         endCellProfit.getMedianProfit().getMedian() / etc.getCount()));

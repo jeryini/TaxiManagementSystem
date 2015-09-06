@@ -114,6 +114,34 @@ public abstract class Architecture {
         return fileQuery2;
     }
 
+    public String getHostTCP() {
+        return hostTCP;
+    }
+
+    public int getPortTCP() {
+        return portTCP;
+    }
+
+    public String getHostDB() {
+        return hostDB;
+    }
+
+    public int getPortDB() {
+        return portDB;
+    }
+
+    public String getUserDB() {
+        return userDB;
+    }
+
+    public String getPassDB() {
+        return passDB;
+    }
+
+    public String getSchemaDB() {
+        return schemaDB;
+    }
+
     /**
      * Outputs a log to a file when top 10 routes is changed.
      *

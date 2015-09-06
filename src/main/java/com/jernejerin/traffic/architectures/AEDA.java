@@ -32,11 +32,11 @@ public class AEDA extends Architecture {
     }
 
     public static void main(String[] args) throws InterruptedException {
-        LOGGER.log(Level.INFO, "Starting single threaded AEDA 3 solution from thread = " + Thread.currentThread());
+        LOGGER.log(Level.INFO, "Starting single threaded AEDA solution from thread = " + Thread.currentThread());
 
         // create Architecture builder
-        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/" +
-                AEDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/" +
+        ArchitectureBuilder builder = new ArchitectureBuilder().fileNameQuery1Output("output/query/" +
+                AEDA.class.getSimpleName() + "_query1.txt").fileNameQuery2Output("output/query/" +
                 AEDA.class.getSimpleName() + "_query2.txt");
 
         // set host and port from command line options
@@ -56,6 +56,7 @@ public class AEDA extends Architecture {
         this.taxiStream = new TaxiStream("/com/jernejerin/" + this.fileNameInput);
 
         // Actor factory for creating Actors.
+        // only one per application
         final ActorSystem system = ActorSystem.create("actorFactory");
 
         // create an "actor-in-a-box". It contains an Actor which can be used as a puppet for sending messages
@@ -63,6 +64,7 @@ public class AEDA extends Architecture {
         final Inbox inbox = Inbox.create(system);
         final Inbox inboxProfitableCells = Inbox.create(system);
 
+        // Create top level actor, supervised by the actor system's provided guardian actor.
         // This will be our root Actor for query 1.
         final ActorRef rootTop10Routes = system.actorOf(Props.create(RouteActor.TopRouteNode.class), "rootTop10Routes");
 
@@ -82,7 +84,7 @@ public class AEDA extends Architecture {
         // top routes for query 2
         final List<CellProfitability> top10ProfitableCells = new LinkedList<>();
 
-        CountDownLatch completeSignal = new CountDownLatch(2);
+        CountDownLatch completeSignal = new CountDownLatch(1);
 
         Stream<Trip> sharedTripsStream = taxiStream.getTrips()
                 .map(t -> {
@@ -112,11 +114,20 @@ public class AEDA extends Architecture {
                                 trip.getRoute500().getId()));
                         // block until we get back the top 10
                         // TODO (Jernej Jerin): Blocking call! Should we compare for top routes in the
-                        // TODO (Jernej Jerin): top actor.
+                        // TODO (Jernej Jerin): top actor. The top actor could then send a message to actor
+                        // TODO (Jernej Jerin): that writes the changes in top 10.
+                        // TODO (Jernej Jerin): That way we can have concurrent processing in actors for multiple
+                        // TODO (Jernej Jerin): trips at the same time, and then order the changes in top actor
+                        // TODO (Jernej Jerin): by id.
+                        // TODO (Jernej Jerin): Check for using ask pattern to send messages.
                         RouteActor.Top10 routeActorTop10 = (RouteActor.Top10) inbox.receive(Duration.create(10000, "seconds"));
                         List<RouteCount> newTop10Routes = Arrays.asList(routeActorTop10.top10Routes);
                         Collections.sort(newTop10Routes, Comparator.<RouteCount>reverseOrder());
 
+                        // TODO (Jernej Jerin): Check concept of Typed Actors as they enable
+                        // TODO (Jernej Jerin): asynchronous execution on another thread. They
+                        // TODO (Jernej Jerin): are a touching point where actor system meet
+                        // TODO (Jernej Jerin): non-actor code.
                         if (!newTop10Routes.equals(top10Routes)) {
                             top10Routes.clear();
                             top10Routes.addAll(newTop10Routes);
@@ -154,89 +165,89 @@ public class AEDA extends Architecture {
                 });
 
         // query 2: Frequent routes
-        sharedTripsStream
-                .map(t -> {
-                    // events leaving window for empty taxis in the last 30 minutes
-                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
-                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
-                        // remove it from queue
-                        Trip trip = tripEmptyTaxis.poll();
-
-                        // tell the root Actor to decrement the empty taxis for the end cell in the removed trip
-                        inbox.send(rootTop10ProfitableCells, new CellProfitabilityActor.DecrementEmptyTaxis
-                                (trip.getRoute250().getEndCell(), trip.getRoute250().getEndCell().getId(),
-                                        trip.getId()));
-
-                        // block until we get back the top 10
-                        CellProfitabilityActor.Top10EmptyTaxis cellActorTop10 = (CellProfitabilityActor.Top10EmptyTaxis)
-                                inbox.receive(Duration.create(10000, "seconds"));
-                        List<CellProfitability> newTop10ProfitableCells = Arrays.asList(cellActorTop10.top10ProfitableCells);
-                        Collections.sort(newTop10ProfitableCells, Comparator.<CellProfitability>reverseOrder());
-
-                        if (!newTop10ProfitableCells.equals(top10ProfitableCells)) {
-                            top10ProfitableCells.clear();
-                            top10ProfitableCells.addAll(newTop10ProfitableCells);
-                            writeTop10ChangeQuery2(top10ProfitableCells, trip.getPickupDatetime().plusMinutes(30),
-                                    trip.getDropOffDatetime().plusMinutes(30),
-                                    t.getTimestampReceived());
-                        }
-                    }
-
-                    // events leaving the window for profit cells in the last 15 minutes
-                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
-                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
-                        Trip trip = tripProfits.poll();
-
-                        // tell the root Actor to decrement the empty taxis for the end cell in the removed trip
-                        inbox.send(rootTop10ProfitableCells, new CellProfitabilityActor.RemoveFareTipAmount(
-                                trip.getRoute250().getStartCell(), trip.getRoute250().getStartCell().getId(),
-                                        trip.getId(), trip.getFareAmount() + trip.getTipAmount()));
-
-                        // block until we get back the top 10
-                        CellProfitabilityActor.Top10FareTipAmount cellActorTop10 = (CellProfitabilityActor.Top10FareTipAmount)
-                                inbox.receive(Duration.create(10000, "seconds"));
-                        List<CellProfitability> newTop10ProfitableCells = Arrays.asList(cellActorTop10.top10ProfitableCells);
-                        Collections.sort(newTop10ProfitableCells, Comparator.<CellProfitability>reverseOrder());
-
-                        if (!newTop10ProfitableCells.equals(top10ProfitableCells)) {
-                            top10ProfitableCells.clear();
-                            top10ProfitableCells.addAll(newTop10ProfitableCells);
-                            writeTop10ChangeQuery2(top10ProfitableCells, trip.getPickupDatetime().plusMinutes(30),
-                                    trip.getDropOffDatetime().plusMinutes(30),
-                                    t.getTimestampReceived());
-                        }
-                    }
-
-                    // add to window
-                    tripEmptyTaxis.add(t);
-                    tripProfits.add(t);
-
-                    // tell the root Actor to increment the empty taxis count for the end cell in the added trip
-                    // reply should go to the inbox
-                    inbox.send(rootTop10Routes, new CellProfitabilityActor.IncrementEmptyTaxis
-                            (t.getRoute250().getEndCell(), t.getRoute250().getEndCell().getId(), t.getId()));
-                    inbox.send(rootTop10Routes, new CellProfitabilityActor.AddFareTipAmount
-                            (t.getRoute250().getStartCell(), t.getRoute250().getStartCell().getId(), t.getId(),
-                                    t.getTipAmount() + t.getFareAmount()));
-
-//                    CellProfitabilityActor.Top10FareTipAmount cellActorTop10_1 = (RouteActor.Top10) inbox.receive(Duration.create(10000, "seconds"));
-//                    List<RouteCount> newTop10Routes = Arrays.asList(routeActorTop10.top10Routes);
-//                    Collections.sort(newTop10Routes, Comparator.<RouteCount>reverseOrder());
-
-//                    return Tuple.of(newTop10Routes, t.getPickupDatetime(), t.getDropOffDatetime(),
-//                            t.getTimestampReceived(), t);
-                    return null;
-                })
-                .observeComplete(v -> {
-                    completeSignal.countDown();
-                })
-                .consume(ct -> {
-//                    if (!top10Routes.equals(ct.getT1())) {
-//                        top10Routes.clear();
-//                        top10Routes.addAll(ct.getT1());
-//                        writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
+//        sharedTripsStream
+//                .map(t -> {
+//                    // events leaving window for empty taxis in the last 30 minutes
+//                    while (tripEmptyTaxis.peek() != null && tripEmptyTaxis.peek().getDropOffTimestamp() <
+//                            t.getDropOffTimestamp() - 30 * 60 * 1000) {
+//                        // remove it from queue
+//                        Trip trip = tripEmptyTaxis.poll();
+//
+//                        // tell the root Actor to decrement the empty taxis for the end cell in the removed trip
+//                        inbox.send(rootTop10ProfitableCells, new CellProfitabilityActor.DecrementEmptyTaxis
+//                                (trip.getRoute250().getEndCell(), trip.getRoute250().getEndCell().getId(),
+//                                        trip.getId()));
+//
+//                        // block until we get back the top 10
+//                        CellProfitabilityActor.Top10EmptyTaxis cellActorTop10 = (CellProfitabilityActor.Top10EmptyTaxis)
+//                                inbox.receive(Duration.create(10000, "seconds"));
+//                        List<CellProfitability> newTop10ProfitableCells = Arrays.asList(cellActorTop10.top10ProfitableCells);
+//                        Collections.sort(newTop10ProfitableCells, Comparator.<CellProfitability>reverseOrder());
+//
+//                        if (!newTop10ProfitableCells.equals(top10ProfitableCells)) {
+//                            top10ProfitableCells.clear();
+//                            top10ProfitableCells.addAll(newTop10ProfitableCells);
+//                            writeTop10ChangeQuery2(top10ProfitableCells, trip.getPickupDatetime().plusMinutes(30),
+//                                    trip.getDropOffDatetime().plusMinutes(30),
+//                                    t.getTimestampReceived());
+//                        }
 //                    }
-                });
+//
+//                    // events leaving the window for profit cells in the last 15 minutes
+//                    while (tripProfits.peek() != null && tripProfits.peek().getDropOffTimestamp() <
+//                            t.getDropOffTimestamp() - 15 * 60 * 1000) {
+//                        Trip trip = tripProfits.poll();
+//
+//                        // tell the root Actor to decrement the empty taxis for the end cell in the removed trip
+//                        inbox.send(rootTop10ProfitableCells, new CellProfitabilityActor.RemoveFareTipAmount(
+//                                trip.getRoute250().getStartCell(), trip.getRoute250().getStartCell().getId(),
+//                                        trip.getId(), trip.getFareAmount() + trip.getTipAmount()));
+//
+//                        // block until we get back the top 10
+//                        CellProfitabilityActor.Top10FareTipAmount cellActorTop10 = (CellProfitabilityActor.Top10FareTipAmount)
+//                                inbox.receive(Duration.create(10000, "seconds"));
+//                        List<CellProfitability> newTop10ProfitableCells = Arrays.asList(cellActorTop10.top10ProfitableCells);
+//                        Collections.sort(newTop10ProfitableCells, Comparator.<CellProfitability>reverseOrder());
+//
+//                        if (!newTop10ProfitableCells.equals(top10ProfitableCells)) {
+//                            top10ProfitableCells.clear();
+//                            top10ProfitableCells.addAll(newTop10ProfitableCells);
+//                            writeTop10ChangeQuery2(top10ProfitableCells, trip.getPickupDatetime().plusMinutes(30),
+//                                    trip.getDropOffDatetime().plusMinutes(30),
+//                                    t.getTimestampReceived());
+//                        }
+//                    }
+//
+//                    // add to window
+//                    tripEmptyTaxis.add(t);
+//                    tripProfits.add(t);
+//
+//                    // tell the root Actor to increment the empty taxis count for the end cell in the added trip
+//                    // reply should go to the inbox
+//                    inbox.send(rootTop10Routes, new CellProfitabilityActor.IncrementEmptyTaxis
+//                            (t.getRoute250().getEndCell(), t.getRoute250().getEndCell().getId(), t.getId()));
+//                    inbox.send(rootTop10Routes, new CellProfitabilityActor.AddFareTipAmount
+//                            (t.getRoute250().getStartCell(), t.getRoute250().getStartCell().getId(), t.getId(),
+//                                    t.getTipAmount() + t.getFareAmount()));
+//
+////                    CellProfitabilityActor.Top10FareTipAmount cellActorTop10_1 = (RouteActor.Top10) inbox.receive(Duration.create(10000, "seconds"));
+////                    List<RouteCount> newTop10Routes = Arrays.asList(routeActorTop10.top10Routes);
+////                    Collections.sort(newTop10Routes, Comparator.<RouteCount>reverseOrder());
+//
+////                    return Tuple.of(newTop10Routes, t.getPickupDatetime(), t.getDropOffDatetime(),
+////                            t.getTimestampReceived(), t);
+//                    return null;
+//                })
+//                .observeComplete(v -> {
+//                    completeSignal.countDown();
+//                })
+//                .consume(ct -> {
+////                    if (!top10Routes.equals(ct.getT1())) {
+////                        top10Routes.clear();
+////                        top10Routes.addAll(ct.getT1());
+////                        writeTop10ChangeQuery1(ct.getT1(), ct.getT2(), ct.getT3(), ct.getT4(), ct.getT5());
+////                    }
+//                });
 
         // read the stream from file: for local testing
         taxiStream.readStream();
